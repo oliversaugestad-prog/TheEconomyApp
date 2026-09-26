@@ -15,6 +15,8 @@ export interface MergeStats {
   updated: number;
   pendingReplaced: number;
   pendingRemoved: number;
+  /** Gamle kopier fjernet fordi banken ga transaksjonen ny ID. */
+  duplicatesRemoved?: number;
 }
 
 export interface MergeOptions {
@@ -24,6 +26,16 @@ export interface MergeOptions {
    */
   pendingComplete?: boolean;
   accountIds?: string[];
+  /**
+   * Kilden leverte alle bokførte transaksjoner fra `from` for disse kontoene. Noen banker gir
+   * samme transaksjon ny ID ved ny henting – da gjenkjennes den på dato, beløp og mottaker
+   * i stedet for å legges inn på nytt, og gamle kopier ryddes bort.
+   */
+  window?: { from: string; accountIds: string[] };
+}
+
+function sameTxKey(t: Transaction): string {
+  return `${t.accountId}|${t.bookingDate}|${t.amount}|${t.currency}|${normalizeCounterparty(t.counterparty)}`;
 }
 
 /** Maks antall dager mellom reservasjon og bokføring når vi matcher uten ID. */
@@ -62,6 +74,27 @@ export function mergeTransactions(
   const removed = new Set<number>();
   const seenPendingExt = new Set<string>();
 
+  // Bokførte transaksjoner i hentevinduet som kilden ikke lenger oppgir med samme ID.
+  const incomingExt = new Set(incoming.filter((t) => t.externalId).map((t) => `${t.accountId}|${t.externalId}`));
+  const incomingKeys = new Set(incoming.filter((t) => t.status === 'booked').map(sameTxKey));
+  const windowAccounts = new Set(options.window?.accountIds ?? []);
+  const staleByKey = new Map<string, number[]>();
+  if (options.window) {
+    result.forEach((t, i) => {
+      if (
+        t.source === 'bank' &&
+        t.status === 'booked' &&
+        t.externalId &&
+        windowAccounts.has(t.accountId) &&
+        t.bookingDate >= options.window!.from &&
+        !incomingExt.has(`${t.accountId}|${t.externalId}`)
+      ) {
+        const k = sameTxKey(t);
+        staleByKey.set(k, [...(staleByKey.get(k) ?? []), i]);
+      }
+    });
+  }
+
   for (const tx of incoming) {
     const extKey = tx.externalId ? `${tx.accountId}|${tx.externalId}` : null;
     if (tx.status === 'pending' && extKey) seenPendingExt.add(extKey);
@@ -72,6 +105,20 @@ export function mergeTransactions(
       result[i] = carryUserFields(tx, result[i]);
       stats.updated += 1;
       continue;
+    }
+
+    // 1b) Samme bokførte transaksjon med ny ID fra banken → oppdater den eksisterende.
+    if (tx.status === 'booked' && windowAccounts.has(tx.accountId)) {
+      const stale = staleByKey.get(sameTxKey(tx));
+      const i = stale?.shift();
+      if (i !== undefined) {
+        const prev = result[i];
+        result[i] = carryUserFields(tx, prev);
+        if (prev.externalId) indexByExt.delete(`${prev.accountId}|${prev.externalId}`);
+        if (extKey) indexByExt.set(extKey, i);
+        stats.updated += 1;
+        continue;
+      }
     }
 
     // 2) Bokført transaksjon som erstatter en reservasjon.
@@ -124,6 +171,16 @@ export function mergeTransactions(
         stats.pendingRemoved += 1;
       }
     });
+  }
+
+  // 5) Overflødige kopier: kilden oppgir transaksjonen, men færre ganger enn vi har den.
+  // Poster kilden ikke nevner i det hele tatt, beholdes (for sikkerhets skyld).
+  for (const [k, idxs] of staleByKey) {
+    if (!incomingKeys.has(k)) continue;
+    for (const i of idxs) {
+      removed.add(i);
+      stats.duplicatesRemoved = (stats.duplicatesRemoved ?? 0) + 1;
+    }
   }
 
   return { transactions: result.filter((_, i) => !removed.has(i)), stats };
