@@ -9,7 +9,7 @@ export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://yxkzcn
 export const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? 'sb_publishable_2oEEwL-uvpUkPeH_jVpnCw_9iTYBKnW';
 
 /** Hovedadressen appen publiseres på. */
-export const APP_URL = import.meta.env.VITE_APP_URL ?? 'https://savest.no/';
+export const APP_URL = import.meta.env.VITE_APP_URL ?? 'https://oliversaugestad-prog.github.io/TheEconomyApp/';
 
 /** Adresser innloggingslenker kan sendes tilbake til. */
 const KNOWN_ORIGINS = ['https://savest.no', 'https://www.savest.no', 'https://oliversaugestad-prog.github.io', 'http://localhost:5173', 'http://localhost:4173'];
