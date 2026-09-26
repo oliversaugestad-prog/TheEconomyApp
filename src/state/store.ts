@@ -1,4 +1,4 @@
-import { normalizeCounterparty } from '../domain/categories';
+import { cleanCounterparty, normalizeCounterparty } from '../domain/categories';
 import { todayIn } from '../domain/dates';
 import { classifyTransactions, mergeTransactions, type MergeStats } from '../domain/reconcile';
 import { detectSubscriptions, suggestionToSubscription, type SubscriptionSuggestion } from '../domain/subscriptions';
@@ -103,7 +103,14 @@ export class SaldoStore {
   }
 
   private reclassify(d: AppData): AppData {
-    return { ...d, transactions: classifyTransactions(d.transactions, d.accounts, d.rules, d.settings.ownNames ?? []) };
+    // Rydd visningsnavn fra banken («Vipps*Storytel» → «Storytel»). Påvirker ikke duplikatkontrollen,
+    // som bruker bankens egne transaksjons-ID-er.
+    const cleaned = d.transactions.map((t) => {
+      if (t.source !== 'bank') return t;
+      const name = cleanCounterparty(t.counterparty) || t.counterparty;
+      return name === t.counterparty ? t : { ...t, counterparty: name };
+    });
+    return { ...d, transactions: classifyTransactions(cleaned, d.accounts, d.rules, d.settings.ownNames ?? []) };
   }
 
   /* ------------------------------ demodata ----------------------------- */
