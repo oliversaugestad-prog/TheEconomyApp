@@ -1,4 +1,4 @@
-import { guessMapping, parseCsv, parseDate, previewImport } from './csv';
+import { guessMapping, parseCsv, parseDate, positiveShare, previewImport } from './csv';
 import { tx } from '../test/factories';
 
 const sample = `Dato;Beskrivelse;Beløp inn;Beløp ut
@@ -55,5 +55,32 @@ describe('CSV-import', () => {
     const preview = previewImport(rows, guessMapping(rows), 'acc', 'NOK', existing);
     // Én finnes fra før → første rad er duplikat, andre like rad er ny
     expect(preview.slice(0, 2).map((r) => r.duplicate)).toEqual([true, false]);
+  });
+});
+
+describe('Amex-eksport', () => {
+  const amex = `Dato,Beskrivelse,Kortmedlem,Konto #,Beløp,Utvidede detaljer
+09/24/2026,"SPOTIFY P471779FF7 STOCKHOLM",OLIVER,-71005,109.00,"Spotify"
+09/13/2026,"REMA 1000 OSLO",OLIVER,-71005,"1,234.50",""
+09/02/2026,"BETALING MOTTATT - TAKK",OLIVER,-71005,-2500.00,""`;
+
+  it('gjenkjenner amerikansk datoformat og beløpskolonnen', () => {
+    const { rows } = parseCsv(amex);
+    const m = guessMapping(rows);
+    expect(m).toMatchObject({ hasHeader: true, date: 0, description: 1, amount: 4, dateOrder: 'mdy' });
+  });
+
+  it('snur fortegn slik at kjøp blir utgifter og innbetalingen blir positiv', () => {
+    const { rows } = parseCsv(amex);
+    const m = guessMapping(rows);
+    const raw = previewImport(rows, m, 'amex', 'NOK', []);
+    expect(positiveShare(raw)).toBeGreaterThan(0.5);
+    const rows2 = previewImport(rows, { ...m, invert: true }, 'amex', 'NOK', []);
+    expect(rows2.map((r) => [r.date, r.amount])).toEqual([
+      ['2026-09-24', -10900],
+      ['2026-09-13', -123450],
+      ['2026-09-02', 250000],
+    ]);
+    expect(rows2.every((r) => !r.error)).toBe(true);
   });
 });

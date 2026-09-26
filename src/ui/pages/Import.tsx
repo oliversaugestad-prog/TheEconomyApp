@@ -1,7 +1,7 @@
 import { CheckCircle2, FileUp, Upload } from 'lucide-react';
 import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { guessMapping, parseCsv, previewImport, type CsvMapping } from '../../domain/csv';
+import { guessMapping, parseCsv, positiveShare, previewImport, type CsvColumn, type CsvMapping } from '../../domain/csv';
 import { formatDate } from '../../domain/dates';
 import { useData, useStore } from '../../state/StoreContext';
 import { AddAccountDialog } from '../components/AccountForms';
@@ -16,7 +16,7 @@ const SAMPLE = `Dato;Beskrivelse;Mottaker;Beløp
 05.09.2026;Varekjøp;REMA 1000 Grünerløkka;-289,40
 25.09.2026;Lønn;Arbeidsgiver AS;32 450,00`;
 
-const FIELDS: { key: keyof Omit<CsvMapping, 'hasHeader'>; label: string; required?: boolean }[] = [
+const FIELDS: { key: CsvColumn; label: string; required?: boolean }[] = [
   { key: 'date', label: 'Dato', required: true },
   { key: 'amount', label: 'Beløp (med fortegn)' },
   { key: 'outAmount', label: 'Beløp ut' },
@@ -35,15 +35,23 @@ export function ImportPage() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [mapping, setMapping] = useState<CsvMapping | null>(null);
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<false | 'account' | 'card'>(false);
+  /** `null` = automatisk forslag ut fra kontotype og beløpene i filen. */
+  const [invert, setInvert] = useState<boolean | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const account = accounts.find((a) => a.id === accountId);
   const parsed = useMemo(() => (text.trim() ? parseCsv(text) : null), [text]);
+  // Kredittkortutstedere (f.eks. Amex) eksporterer ofte kjøp som positive beløp. Foreslå å snu fortegnet da.
+  const autoInvert = useMemo(() => {
+    if (!parsed || !mapping || account?.type !== 'credit_card') return false;
+    return positiveShare(previewImport(parsed.rows, { ...mapping, invert: false }, account.id, account.currency, [])) > 0.5;
+  }, [parsed, mapping, account]);
+  const effectiveInvert = invert ?? autoInvert;
   const preview = useMemo(
-    () => (parsed && mapping && account ? previewImport(parsed.rows, mapping, account.id, account.currency, data.transactions) : []),
-    [parsed, mapping, account, data.transactions],
+    () => (parsed && mapping && account ? previewImport(parsed.rows, { ...mapping, invert: effectiveInvert }, account.id, account.currency, data.transactions) : []),
+    [parsed, mapping, account, data.transactions, effectiveInvert],
   );
   const counts = {
     ok: preview.filter((r) => !r.error && !r.duplicate).length,
@@ -56,6 +64,7 @@ export function ImportPage() {
     setText(content);
     setFileName(name);
     setResult(null);
+    setInvert(null);
     const p = content.trim() ? parseCsv(content) : null;
     setMapping(p ? guessMapping(p.rows) : null);
   };
@@ -88,7 +97,7 @@ export function ImportPage() {
   return (
     <Page title="Importer CSV" back={{ to: '/kontoer', label: 'Tilbake til kontoer' }} plain>
       <p className="muted small">
-        Eksporter transaksjoner fra nettbanken som CSV og importer dem hit. Du ser en forhåndsvisning før noe lagres, og transaksjoner som allerede finnes, hoppes over.
+        Eksporter transaksjoner fra nettbanken – eller fra Amex under «Kontoutskrifter og aktivitet» → «Last ned» → CSV – og importer dem hit. Du ser en forhåndsvisning før noe lagres, og transaksjoner som allerede finnes, hoppes over.
       </p>
 
       {result && (
@@ -120,16 +129,24 @@ export function ImportPage() {
                 ))}
               </select>
             </label>
-            <button type="button" className="btn" onClick={() => setAdding(true)}>
+            <button type="button" className="btn" onClick={() => setAdding('card')}>
+              Nytt kredittkort
+            </button>
+            <button type="button" className="btn" onClick={() => setAdding('account')}>
               Ny manuell konto
             </button>
           </div>
         ) : (
           <div className="stack-sm">
-            <p className="muted small">Du må ha en konto å importere til.</p>
-            <button type="button" className="btn primary" onClick={() => setAdding(true)}>
-              Opprett manuell konto
-            </button>
+            <p className="muted small">Du må ha en konto eller et kort å importere til.</p>
+            <div className="row wrap">
+              <button type="button" className="btn primary" onClick={() => setAdding('card')}>
+                Opprett kredittkort (f.eks. Amex)
+              </button>
+              <button type="button" className="btn" onClick={() => setAdding('account')}>
+                Opprett manuell konto
+              </button>
+            </div>
           </div>
         )}
       </section>
@@ -176,6 +193,17 @@ export function ImportPage() {
           <label className="check">
             <input type="checkbox" checked={mapping.hasHeader} onChange={(e) => setMapping({ ...mapping, hasHeader: e.target.checked })} />
             <span className="small">Første rad er overskrifter</span>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={effectiveInvert} onChange={(e) => setInvert(e.target.checked)} />
+            <span className="small">
+              Kjøp står som positive beløp – snu fortegn
+              {account?.type === 'credit_card' && autoInvert && invert === null ? ' (foreslått for kredittkort som Amex)' : ''}
+            </span>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={mapping.dateOrder === 'mdy'} onChange={(e) => setMapping({ ...mapping, dateOrder: e.target.checked ? 'mdy' : 'dmy' })} />
+            <span className="small">Datoer har måned først (09/24/2026)</span>
           </label>
           <div className="form-grid two">
             {FIELDS.map((f) => (
@@ -262,7 +290,13 @@ export function ImportPage() {
         </section>
       )}
 
-      <AddAccountDialog open={adding} onClose={() => setAdding(false)} onCreated={(a) => setAccountId(a.id)} />
+      <AddAccountDialog
+        key={adding || 'closed'}
+        open={!!adding}
+        initialType={adding === 'card' ? 'credit_card' : 'checking'}
+        onClose={() => setAdding(false)}
+        onCreated={(a) => setAccountId(a.id)}
+      />
     </Page>
   );
 }

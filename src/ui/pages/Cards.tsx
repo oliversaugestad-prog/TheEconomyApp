@@ -1,4 +1,4 @@
-import { CreditCard, Pencil, Plus, Receipt } from 'lucide-react';
+import { CreditCard, FileUp, Pencil, Plus, Receipt } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { availableCredit, cardDebt, reservedAmount, sortByDateDesc } from '../../domain/calculations';
@@ -101,6 +101,14 @@ export function CardsPage() {
       }
     >
       <AddAccountDialog open={adding} initialType="credit_card" onClose={() => setAdding(false)} onCreated={(a) => navigate(`/kort/${a.id}`)} />
+      <div className="row wrap">
+        <button type="button" className="btn small" onClick={() => setAdding(true)}>
+          <Plus size={16} aria-hidden="true" /> Legg til kort
+        </button>
+        <Link to={`/kontoer/import${cards.find((c) => c.source !== 'bank' && !c.isDemo) ? `?konto=${cards.find((c) => c.source !== 'bank' && !c.isDemo)!.id}` : ''}`} className="btn small">
+          <FileUp size={16} aria-hidden="true" /> Importer CSV (f.eks. Amex)
+        </Link>
+      </div>
       {cards.length === 0 ? (
         <div className="card">
           <Empty icon={<CreditCard size={24} />} title="Ingen kredittkort" action={<button type="button" className="btn small" onClick={() => setAdding(true)}>Legg til kort manuelt</button>}>
@@ -273,6 +281,12 @@ export function CardDetailPage() {
             «Gjeld nå» er alt som er bokført og ikke betalt. «Kortkjøp» er kjøp denne måneden (inkl. reserverte, minus refusjoner). «Faktura» er beløpet på siste faktura fra utsteder.
           </p>
         </section>
+      </div>
+
+      <div className="row wrap">
+        <Link to={`/kontoer/import?konto=${card.id}`} className="btn small">
+          <FileUp size={16} aria-hidden="true" /> Importer transaksjoner (CSV)
+        </Link>
       </div>
 
       <section className="card">

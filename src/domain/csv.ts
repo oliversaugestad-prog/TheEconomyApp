@@ -45,8 +45,11 @@ function splitLine(line: string, d: string): string[] {
   return line.split(d);
 }
 
-/** Tolker «24.09.2026», «24/09/2026», «2026-09-24» og «24.09.26». */
-export function parseDate(input: string): IsoDate | null {
+/**
+ * Tolker «24.09.2026», «24/09/2026», «2026-09-24» og «24.09.26».
+ * Med `order = 'mdy'` tolkes «09/24/2026» som amerikansk (måned først), slik noen utstedere eksporterer.
+ */
+export function parseDate(input: string, order: 'dmy' | 'mdy' = 'dmy'): IsoDate | null {
   const s = input.trim();
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
   let y: number, mo: number, d: number;
@@ -57,8 +60,8 @@ export function parseDate(input: string): IsoDate | null {
   } else {
     m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/.exec(s);
     if (!m) return null;
-    d = +m[1];
-    mo = +m[2];
+    d = order === 'mdy' ? +m[2] : +m[1];
+    mo = order === 'mdy' ? +m[1] : +m[2];
     y = +m[3];
     if (y < 100) y += 2000;
   }
@@ -78,9 +81,15 @@ export interface CsvMapping {
   inAmount: number | null;
   counterparty: number | null;
   description: number | null;
+  /** Datoformat: dag først (norsk) eller måned først (amerikansk). */
+  dateOrder?: 'dmy' | 'mdy';
+  /** Snu fortegn: kjøp står som positive beløp (vanlig for kredittkort, f.eks. Amex). */
+  invert?: boolean;
 }
 
-const HEADER_HINTS: Record<keyof Omit<CsvMapping, 'hasHeader'>, RegExp> = {
+export type CsvColumn = 'date' | 'amount' | 'outAmount' | 'inAmount' | 'counterparty' | 'description';
+
+const HEADER_HINTS: Record<CsvColumn, RegExp> = {
   date: /(dato|date|bokf)/i,
   amount: /^(beløp|belop|amount|sum)$/i,
   outAmount: /(ut|uttak|debet|belastet)/i,
@@ -122,7 +131,21 @@ export function guessMapping(rows: string[][]): CsvMapping {
     mapping.description = sample.findIndex((c, i) => i !== mapping.date && i !== mapping.amount && c.length > 0);
     for (const k of ['date', 'amount', 'description'] as const) if (mapping[k] === -1) mapping[k] = null;
   }
+  if (mapping.date !== null) mapping.dateOrder = guessDateOrder(rows.slice(hasHeader ? 1 : 0).map((r) => r[mapping.date!] ?? ''));
   return mapping;
+}
+
+/** Måned først dersom datoene bare gir mening slik (f.eks. «09/24/2026»). */
+export function guessDateOrder(values: string[]): 'dmy' | 'mdy' {
+  const okDmy = values.filter((v) => parseDate(v, 'dmy')).length;
+  const okMdy = values.filter((v) => parseDate(v, 'mdy')).length;
+  return okMdy > okDmy ? 'mdy' : 'dmy';
+}
+
+/** Andel positive beløp – brukes til å foreslå å snu fortegn for kredittkort. */
+export function positiveShare(rows: CsvRowResult[]): number {
+  const amounts = rows.filter((r) => r.amount !== null && r.amount !== 0);
+  return amounts.length ? amounts.filter((r) => r.amount! > 0).length / amounts.length : 0;
 }
 
 export interface CsvRowResult {
@@ -167,7 +190,7 @@ export function previewImport(
 
   return data.map((r, i) => {
     const get = (idx: number | null) => (idx === null ? '' : (r[idx] ?? ''));
-    const date = mapping.date === null ? null : parseDate(get(mapping.date));
+    const date = mapping.date === null ? null : parseDate(get(mapping.date), mapping.dateOrder);
     let amount: Minor | null = null;
     if (mapping.amount !== null) {
       amount = parseAmount(get(mapping.amount), currency);
@@ -176,6 +199,7 @@ export function previewImport(
       const inn = get(mapping.inAmount) ? parseAmount(get(mapping.inAmount), currency) : 0;
       amount = out === null || inn === null ? null : (inn ?? 0) - Math.abs(out ?? 0);
     }
+    if (mapping.invert && amount !== null && amount !== 0) amount = -amount;
     const counterparty = get(mapping.counterparty);
     const description = get(mapping.description);
     let error: string | null = null;
