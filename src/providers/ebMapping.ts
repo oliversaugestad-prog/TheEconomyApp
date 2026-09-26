@@ -1,4 +1,5 @@
-import { normalizeCounterparty } from '../domain/categories';
+import { cleanCounterparty, normalizeCounterparty } from '../domain/categories';
+import { addDays } from '../domain/dates';
 import { currencyExponent } from '../domain/money';
 import type { Account, AccountType, Connection, IsoDate, Minor, Transaction } from '../domain/types';
 
@@ -134,9 +135,15 @@ export function mapAccount(
   };
 }
 
-function txDate(t: EbTransaction, fallback: IsoDate): IsoDate {
+/**
+ * Bokføringsdato, ellers transaksjons- eller valuteringsdato. Noen banker sender
+ * urealistiske datoer langt frem i tid på reservasjoner; de settes til i dag.
+ */
+function txDate(t: EbTransaction, today: IsoDate): IsoDate {
   const d = t.booking_date ?? t.transaction_date ?? t.value_date;
-  return d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : fallback;
+  if (!d || !/^\d{4}-\d{2}-\d{2}/.test(d)) return today;
+  const date = d.slice(0, 10);
+  return date > addDays(today, 7) ? today : date;
 }
 
 export function mapTransactions(r: EbAccountResult, accountId: string, currency: string, today: IsoDate): Transaction[] {
@@ -150,7 +157,7 @@ export function mapTransactions(r: EbAccountResult, accountId: string, currency:
     const amount = debit ? -Math.abs(raw) : Math.abs(raw);
     const remittance = (t.remittance_information ?? []).filter(Boolean).join(' ').trim();
     const party = debit ? t.creditor?.name : t.debtor?.name;
-    const counterparty = (party || remittance || t.bank_transaction_code?.description || 'Ukjent').trim().slice(0, 140);
+    const counterparty = cleanCounterparty(party || remittance || t.bank_transaction_code?.description || '').slice(0, 140) || 'Ukjent';
     const date = txDate(t, today);
     const status = t.status === 'PDNG' ? 'pending' : 'booked';
     // Stabil ID: fra banken hvis den finnes, ellers et fingeravtrykk (med teller for like transaksjoner).

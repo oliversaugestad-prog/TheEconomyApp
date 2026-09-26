@@ -161,6 +161,8 @@ export function SettingsPage() {
         </section>
       </div>
 
+      <OwnNamesCard />
+
       <section className="card stack" aria-labelledby="notif-h">
         <h2 id="notif-h">Varsler</h2>
         <p className="small muted">Varslene vises på oversiktssiden i appen. Push-varsler og e-post krever en serverkomponent og er ikke aktivert i denne versjonen.</p>
@@ -280,5 +282,44 @@ function RateField({ currency, base, rate, meta }: { currency: string; base: str
       <span className="hint">{meta}</span>
       {error && <span className="error-text">{error}</span>}
     </div>
+  );
+}
+
+/** Navn du står oppført med i bankene – overføringer til og fra deg selv telles da ikke som forbruk. */
+function OwnNamesCard() {
+  const store = useStore();
+  const saved = useData().settings.ownNames ?? [];
+  const [value, setValue] = useState(saved.join('\n'));
+  const [done, setDone] = useState(false);
+  const save = () => {
+    const names = value
+      .split(/\n|,/)
+      .map((n) => n.trim())
+      .filter((n) => n.length > 2);
+    store.updateSettings({ ownNames: names });
+    setDone(true);
+    setTimeout(() => setDone(false), 2500);
+  };
+  return (
+    <section className="card stack" aria-labelledby="own-h">
+      <h2 id="own-h">Overføringer til deg selv</h2>
+      <p className="small muted">
+        Skriv navnet ditt slik det står i bankene. Betalinger til og fra dette navnet regnes som flytting mellom egne kontoer, ikke som inntekt eller forbruk. Ett navn per linje.
+      </p>
+      <label className="field">
+        <span>Navn</span>
+        <textarea id="own-names" className="input" rows={2} value={value} onChange={(e) => setValue(e.target.value)} placeholder="Fornavn Mellomnavn Etternavn" />
+      </label>
+      <div className="row">
+        <button type="button" className="btn small" onClick={save}>
+          Lagre
+        </button>
+        {done && (
+          <span className="small muted" role="status">
+            Lagret. Transaksjonene er sortert på nytt.
+          </span>
+        )}
+      </div>
+    </section>
   );
 }

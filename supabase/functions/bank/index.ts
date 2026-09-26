@@ -1,6 +1,6 @@
 // Saldo – serverfunksjon for Enable Banking (PSD2 kontoinformasjon).
 //
-// - POST (med Supabase-innlogging): status, set-key, aspsps, start-auth, sync, disconnect
+// - POST (med Supabase-innlogging): status, rates, set-key, aspsps, start-auth, sync, disconnect
 // - GET  (fra banken etter BankID): tar imot ?code&state, oppretter samtykke og sender
 //   brukeren tilbake til Saldo.
 //
@@ -228,6 +228,15 @@ async function handleAction(req: Request): Promise<Response> {
       redirectUrl: CALLBACK_URL,
       sessions: (sessions ?? []).map(publicSession),
     });
+  }
+
+  if (action === 'rates') {
+    // Offisielle valutakurser fra Norges Bank (offentlige data). Tolkes i appen.
+    const res = await fetch(
+      'https://data.norges-bank.no/api/data/EXR/B.EUR+SEK+DKK+USD+GBP+CHF.NOK.SP?lastNObservations=1&format=sdmx-json&locale=en',
+    );
+    if (!res.ok) throw new HttpError(502, 'Kunne ikke hente valutakurser fra Norges Bank.');
+    return json(req, { sdmx: await res.json() });
   }
 
   if (!allowed) throw new HttpError(403, 'Denne brukeren har ikke tilgang til banktilkobling.', 'forbidden');
