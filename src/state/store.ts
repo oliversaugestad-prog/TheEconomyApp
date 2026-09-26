@@ -13,6 +13,7 @@ import type {
   CurrencyCode,
   Minor,
   Settings,
+  ExchangeRate,
   Subscription,
   Transaction,
   TransactionKind,
@@ -102,7 +103,7 @@ export class SaldoStore {
   }
 
   private reclassify(d: AppData): AppData {
-    return { ...d, transactions: classifyTransactions(d.transactions, d.accounts, d.rules) };
+    return { ...d, transactions: classifyTransactions(d.transactions, d.accounts, d.rules, d.settings.ownNames ?? []) };
   }
 
   /* ------------------------------ demodata ----------------------------- */
@@ -348,7 +349,22 @@ export class SaldoStore {
   /* ---------------------------- innstillinger ---------------------------- */
 
   updateSettings(patch: Partial<Settings>) {
-    this.update((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
+    this.update((d) => {
+      const next = { ...d, settings: { ...d.settings, ...patch } };
+      // Nye egne navn påvirker hvilke transaksjoner som er overføringer.
+      return patch.ownNames ? this.reclassify(next) : next;
+    });
+  }
+
+  /** Oppdaterer offisielle valutakurser. Kurser du har satt selv, beholdes. */
+  setOfficialRates(rates: ExchangeRate[]) {
+    if (!rates.length) return;
+    this.update((d) => {
+      const manual = d.rates.filter((r) => r.source === 'Oppgitt manuelt av deg');
+      const fresh = rates.filter((r) => r.base === d.settings.baseCurrency && !manual.some((m) => m.currency === r.currency && m.base === r.base));
+      const others = d.rates.filter((r) => r.source === 'Oppgitt manuelt av deg' || !fresh.some((f) => f.currency === r.currency && f.base === r.base));
+      return { ...d, rates: [...others, ...fresh] };
+    });
   }
 
   setRate(currency: CurrencyCode, rate: number) {
@@ -525,7 +541,7 @@ export function buildWithDemo(base: AppData, now: Date): AppData {
   const demo = generateDemoData(today, now);
   const accounts = [...base.accounts, ...demo.accounts];
   const rules = base.rules;
-  const transactions = classifyTransactions([...base.transactions, ...demo.transactions], accounts, rules);
+  const transactions = classifyTransactions([...base.transactions, ...demo.transactions], accounts, rules, base.settings.ownNames ?? []);
   const existingRates = new Set(base.rates.map((r) => `${r.currency}|${r.base}`));
   let data: AppData = {
     ...base,

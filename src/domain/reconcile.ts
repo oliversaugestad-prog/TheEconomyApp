@@ -129,14 +129,17 @@ export function mergeTransactions(
   return { transactions: result.filter((_, i) => !removed.has(i)), stats };
 }
 
-const TRANSFER_HINT = /(overf|transfer|egen konto|egne konto|innbetaling kort|kredittkort|nedbetaling|sparing|bsu|fra konto|til konto|faktura kort|kortfaktura)/i;
+const TRANSFER_HINT = /(overf|transfer|egen konto|egne konto|innbetaling kort|kredittkort|kreditt as|nedbetaling|sparing|bsu|fra konto|til konto|faktura kort|kortfaktura|top.?up|påfyll|revolut|sent from|exchanged)/i;
+/** Veksling mellom valutakontoer hos samme bank (f.eks. Revolut) – flytting av egne penger. */
+const EXCHANGE = /^(exchanged (to|from)|exchange (to|from)|valutaveksling|veksling)\b/i;
 const REFUND_HINT = /(refusjon|retur|refund|tilbakebetal|kreditering|reklamasjon)/i;
 const TRANSFER_MAX_DAYS = 3;
 const REFUND_MAX_DAYS = 90;
 
-function hasTransferHint(t: Transaction, accounts: Map<string, Account>): boolean {
+function hasTransferHint(t: Transaction, accounts: Map<string, Account>, ownKeys: Set<string>): boolean {
   const text = `${t.counterparty} ${t.description}`;
   if (TRANSFER_HINT.test(text)) return true;
+  if (ownKeys.has(normalizeCounterparty(t.counterparty))) return true;
   // Mottaker er navnet på en av brukerens egne kontoer.
   const lower = text.toLowerCase();
   for (const a of accounts.values()) {
@@ -151,6 +154,8 @@ function hasTransferHint(t: Transaction, accounts: Map<string, Account>): boolea
  * 2. Interne overføringer: motsatte, like beløp mellom to egne kontoer innen tre
  *    dager, der minst én side ser ut som en overføring. Går den ene veien til et
  *    kredittkort, er det en kortbetaling.
+ *    Valutaveksling og overføringer til/fra ditt eget navn regnes også som
+ *    interne, selv uten motpost.
  * 3. Refusjoner: innbetaling fra en mottaker vi tidligere har handlet hos, som
  *    er merket som refusjon/retur eller har samme beløp som et tidligere kjøp.
  *    Refusjonen får kategorien til kjøpet.
@@ -159,8 +164,10 @@ export function classifyTransactions(
   transactions: Transaction[],
   accountsList: Account[],
   rules: CategoryRule[],
+  ownNames: string[] = [],
 ): Transaction[] {
   const accounts = new Map(accountsList.map((a) => [a.id, a]));
+  const ownKeys = new Set(ownNames.map(normalizeCounterparty).filter((k) => k.length > 2));
   const ruleByKey = new Map(rules.map((r) => [r.matchKey, r.category]));
 
   const txs = transactions.map((t) => {
@@ -202,7 +209,7 @@ export function classifyTransactions(
       if (!accounts.has(inn.accountId)) continue;
       const diff = Math.abs(daysBetween(out.bookingDate, inn.bookingDate));
       if (diff > TRANSFER_MAX_DAYS) continue;
-      if (!hasTransferHint(out, accounts) && !hasTransferHint(inn, accounts)) continue;
+      if (!hasTransferHint(out, accounts, ownKeys) && !hasTransferHint(inn, accounts, ownKeys)) continue;
       if (diff < bestDiff) {
         best = j;
         bestDiff = diff;
@@ -230,6 +237,16 @@ export function classifyTransactions(
     if (!/(kredittkort|kortfaktura|faktura kort|innbetaling kort)/.test(text)) continue;
     const card = cards.find((c) => text.includes(c.name.toLowerCase()) || text.includes(c.bankName.toLowerCase()));
     if (card) txs[i] = { ...t, kind: 'card_payment', linkedTransactionId: null };
+  }
+
+  // Valutaveksling og overføringer til/fra deg selv der motposten ikke finnes i Saldo
+  // (f.eks. en konto i en bank som ikke er koblet til, eller en annen valuta).
+  for (const i of order) {
+    const t = txs[i];
+    if (t.userKind || t.kind !== 'normal' || linked.has(i)) continue;
+    if (EXCHANGE.test(t.counterparty.trim()) || EXCHANGE.test(t.description.trim()) || ownKeys.has(normalizeCounterparty(t.counterparty))) {
+      txs[i] = { ...t, kind: 'internal_transfer', linkedTransactionId: null };
+    }
   }
 
   // Refusjoner

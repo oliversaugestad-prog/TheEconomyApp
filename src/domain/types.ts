@@ -194,6 +194,8 @@ export interface Settings {
   timeZone: string;
   hideAmounts: boolean;
   notifications: NotificationSettings;
+  /** Navn du står oppført med i banken – brukes til å gjenkjenne overføringer til deg selv. */
+  ownNames?: string[];
 }
 
 export interface AppData {

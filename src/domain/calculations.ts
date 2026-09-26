@@ -53,6 +53,8 @@ export interface BalanceSummary {
   net: { amount: Minor; currency: CurrencyCode; complete: boolean };
   bankAccounts: Account[];
   cards: Account[];
+  /** Kontoer der tilgjengelig saldo er brukt fordi banken ikke oppgir bokført saldo. */
+  bookedSubstituted: Account[];
 }
 
 /**
@@ -66,7 +68,10 @@ export function balanceSummary(data: Pick<AppData, 'accounts' | 'transactions' |
   const inc = includedAccounts(data.accounts);
   const bankAccounts = inc.filter(isBankAccount);
   const cards = inc.filter(isCard);
-  const booked = sumMoney(bankAccounts.map((a) => item(a, a.bookedBalance)), base, data.rates);
+  // Noen banker (f.eks. Revolut) oppgir bare tilgjengelig saldo. Da brukes den, og
+  // kontoen listes i `bookedSubstituted` slik at det vises tydelig.
+  const bookedSubstituted = bankAccounts.filter((a) => a.bookedBalance === null && a.availableBalance !== null);
+  const booked = sumMoney(bankAccounts.map((a) => item(a, bookedOrAvailable(a))), base, data.rates);
   const available = sumMoney(bankAccounts.map((a) => item(a, a.availableBalance)), base, data.rates);
   const debt = sumMoney(cards.map((a) => item(a, cardDebt(a))), base, data.rates);
   const reserved = sumMoney(cards.map((a) => item(a, reservedAmount(a.id, data.transactions))), base, data.rates);
@@ -82,7 +87,13 @@ export function balanceSummary(data: Pick<AppData, 'accounts' | 'transactions' |
     },
     bankAccounts,
     cards,
+    bookedSubstituted,
   };
+}
+
+/** Bokført saldo, eller tilgjengelig saldo når banken ikke oppgir bokført. */
+export function bookedOrAvailable(a: Account): Minor | null {
+  return a.bookedBalance ?? (a.type === 'credit_card' ? null : a.availableBalance);
 }
 
 /** Bokført og tilgjengelig saldo per bank (for kontolisten). */
@@ -96,7 +107,7 @@ export function bankTotals(accounts: Account[], base: CurrencyCode, rates: Excha
   return [...groups.entries()].map(([bank, list]) => ({
     bank,
     accounts: list,
-    total: sumMoney(list.map((a) => item(a, a.bookedBalance)), base, rates),
+    total: sumMoney(list.map((a) => item(a, bookedOrAvailable(a))), base, rates),
   }));
 }
 

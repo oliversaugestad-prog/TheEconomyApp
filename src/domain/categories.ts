@@ -35,11 +35,22 @@ export function categoryLabel(id: CategoryId): string {
 }
 
 /** Normaliserer mottakernavn til en nøkkel for regler og abonnementsgjenkjenning. */
+/** Betalingsformidlere som står foran det egentlige navnet, f.eks. «Vipps*Storytel». */
+const PROCESSOR_PREFIX = /^\s*(vipps|mobilepay|paypal|sumup|sq|iz|zettle|klarna|stripe|google pay|apple pay)\s*[*:]+\s*/i;
+/** Bankenes egne tekster foran mottakeren (bl.a. danske banker). */
+const BANK_TEXT_PREFIX = /^\s*(udbetaling|varekøb|varekjøp|dankort-køb|visa-køb|kortkjøp|nota)\s+/i;
+
+/** Fjerner bankens og betalingsformidlerens prefiks, men beholder mottakeren. */
+export function cleanCounterparty(name: string): string {
+  return name.replace(BANK_TEXT_PREFIX, '').replace(PROCESSOR_PREFIX, '').replace(/\s+/g, ' ').trim();
+}
+
+/** Normaliserer mottakernavn til en nøkkel for regler og abonnementsgjenkjenning. */
 export function normalizeCounterparty(name: string): string {
-  return name
+  return cleanCounterparty(name)
     .toLowerCase()
     .replace(/\*.*$/, '') // «NETFLIX.COM*1234» → «netflix.com»
-    .replace(/\b(as|asa|ab|ltd|inc|no|com|www)\b/g, ' ')
+    .replace(/\b(as|asa|ab|aps|a s|ltd|inc|no|com|dk|www)\b/g, ' ')
     .replace(/\d{3,}/g, ' ')
     .replace(/[^a-zæøå0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -48,16 +59,16 @@ export function normalizeCounterparty(name: string): string {
 
 /** Enkle søkeord for automatisk kategorisering. Brukerens regler går foran. */
 const KEYWORDS: Array<[RegExp, CategoryId]> = [
-  [/\b(rema|kiwi|coop|extra|meny|spar|joker|bunnpris|oda)\b/, 'dagligvarer'],
-  [/\b(ruter|vy|atb|skyss|kolumbus|circle k|uno x|esso|shell|bolt|uber|easypark|flytoget|sas|norwegian)\b/, 'transport'],
-  [/\b(netflix|spotify|hbo|max|viaplay|disney|icloud|apple|google|storytel|youtube|tidal|aftenposten|adobe)\b/, 'abonnementer'],
+  [/\b(rema|kiwi|coop|extra|meny|spar|joker|bunnpris|oda|lidl|netto|føtex|fotex|bilka|ica|irma|fakta|aldi|7 eleven|7-eleven|narvesen|matkroken)\b/, 'dagligvarer'],
+  [/\b(ruter|ruterappen|vy|atb|skyss|kolumbus|entur|flytoget|flybussen|rejsekort|dsb|circle k|uno x|esso|shell|bolt|uber|ryde|voi|tier|lime|easypark|sas|norwegian|fylkeskomm)\b/, 'transport'],
+  [/\b(netflix|spotify|hbo|max|viaplay|disney|icloud|apple|google|storytel|audible|youtube|tidal|aftenposten|adobe|puregym|eesy|anthropic|openai|plan fee)\b/, 'abonnementer'],
   [/\b(husleie|eiendom|fjordkraft|tibber|elvia|strøm|borettslag|fellesutgifter)\b/, 'bolig'],
-  [/\b(apotek|vitus|legevakt|lege|tannlege|boots)\b/, 'helse'],
+  [/\b(apotek|apotek 1|vitus|legevakt|lege|tannlege|boots|matas)\b/, 'helse'],
   [/\b(kino|nordisk film|ticketmaster|billettservice|steam|playstation)\b/, 'underholdning'],
-  [/\b(zalando|elkjøp|power|xxl|h m|hm|clas ohlson|ikea|komplett|jernia)\b/, 'shopping'],
-  [/\b(restaurant|cafe|kafé|espresso house|peppes|mcdonald|burger king|foodora|wolt|starbucks)\b/, 'restaurant'],
+  [/\b(zalando|elkjøp|power|xxl|h m|hm|clas ohlson|ikea|komplett|jernia|normal)\b/, 'shopping'],
+  [/\b(restaurant|restaurante|cafe|kafe|kafé|café|bakeri|bageri|bar|pub|bistro|pizza|sushi|burger|kebab|espresso house|coffee|kaffe|peppes|mcdonald|burger king|foodora|wolt|just eat|starbucks|proud mary)\b/, 'restaurant'],
   [/\b(sats|evo|elixia|telenor|telia|ice)\b/, 'abonnementer'],
-  [/\b(lønn|lonn)\b/, 'lonn'],
+  [/\b(lønn|lonn|løn)\b/, 'lonn'],
 ];
 
 export function guessCategory(counterparty: string, description: string, amount: number): CategoryId {

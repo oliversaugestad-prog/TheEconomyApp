@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   balanceSummary,
+  bookedOrAvailable,
   cardDebt,
   categoryBreakdown,
   monthlySeries,
@@ -336,11 +337,16 @@ export function OverviewPage() {
         <SumBreakdown
           sum={balances.booked}
           accounts={balances.bankAccounts}
-          valueOf={(a) => a.bookedBalance}
+          valueOf={bookedOrAvailable}
           totalLabel="Samlet bokført saldo"
           explanation={
             <>
               Summen av bokført saldo på bankkontoene som inngår i oversikten. Kredittkort, kredittgrenser og tilgjengelig kreditt er ikke med – det er ikke dine egne penger.{' '}
+              {balances.bookedSubstituted.length > 0 && (
+                <>
+                  For {[...new Set(balances.bookedSubstituted.map((a) => a.bankName))].join(', ')} er tilgjengelig saldo brukt, fordi banken ikke oppgir bokført saldo.{' '}
+                </>
+              )}
               <Link to="/kontoer" onClick={() => setDetail(null)}>
                 Velg kontoer
               </Link>

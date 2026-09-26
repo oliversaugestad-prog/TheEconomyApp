@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useBackend } from '../backend/session';
 import { BankApiError, callBank, type BankStatus } from '../backend/supabase';
 import { SAVE_ERROR_EVENT } from '../storage/remote';
+import { parseNorgesBankRates } from '../domain/norgesBank';
 import { connectionFromSession, EB_PROVIDER_ID } from '../providers/enableBanking';
 import { useStore } from '../state/StoreContext';
 
@@ -59,6 +60,16 @@ export function BankBridge({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Offisielle valutakurser fra Norges Bank (hentes via serveren).
+  useEffect(() => {
+    if (backend.mode !== 'remote') return;
+    callBank<{ sdmx: unknown }>('rates')
+      .then((r) => store.setOfficialRates(parseNorgesBankRates(r.sdmx as Parameters<typeof parseNorgesBankRates>[0])))
+      .catch(() => {
+        /* uten kurser merkes totalsummer i fremmed valuta som ufullstendige */
+      });
+  }, [backend.mode, store]);
 
   // Tilbake fra banken.
   useEffect(() => {

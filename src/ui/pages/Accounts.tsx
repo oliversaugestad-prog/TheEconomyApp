@@ -1,7 +1,7 @@
 import { FileUp, Landmark, Link2, Plus, RefreshCw, Unplug } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { availableCredit, cardDebt, reservedAmount } from '../../domain/calculations';
+import { availableCredit, bookedOrAvailable, cardDebt, reservedAmount } from '../../domain/calculations';
 import { formatTimestamp } from '../../domain/dates';
 import { sumMoney } from '../../domain/money';
 import type { Account, Connection } from '../../domain/types';
@@ -75,7 +75,7 @@ export function AccountsPage() {
         const bankAccounts = accounts.filter((a) => a.type !== 'credit_card');
         const cards = accounts.filter((a) => a.type === 'credit_card');
         const total = sumMoney(
-          bankAccounts.map((a) => ({ id: a.id, label: a.name, amount: a.bookedBalance, currency: a.currency })),
+          bankAccounts.map((a) => ({ id: a.id, label: a.name, amount: bookedOrAvailable(a), currency: a.currency })),
           base,
           data.rates,
         );
@@ -208,10 +208,16 @@ function AccountRow({ account: a }: { account: Account }) {
         ) : (
           <>
             <p className="num" style={{ fontWeight: 600 }}>
-              <Amount value={a.bookedBalance} currency={a.currency} />
+              <Amount value={bookedOrAvailable(a)} currency={a.currency} />
             </p>
             <p className="xsmall subtle">
-              Tilgjengelig <Amount value={a.availableBalance} currency={a.currency} unknownLabel="ikke oppgitt" />
+              {a.bookedBalance === null && a.availableBalance !== null ? (
+                'Tilgjengelig saldo – banken oppgir ikke bokført'
+              ) : (
+                <>
+                  Tilgjengelig <Amount value={a.availableBalance} currency={a.currency} unknownLabel="ikke oppgitt" />
+                </>
+              )}
               {reserved > 0 && (
                 <>
                   {' '}
