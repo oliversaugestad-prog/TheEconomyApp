@@ -41,6 +41,22 @@ describe('synkronisering av ekte tilkobling', () => {
     expect(store.data.connections[0].lastSuccessfulSync).toBe('2026-09-26T17:00:00Z');
   });
 
+  it('beholder eget navn og farge, og henter ikke inn igjen en slettet konto', async () => {
+    const store = new SaldoStore(memoryRepository(), () => new Date('2026-09-26T17:00:00Z'), false);
+    store.upsertConnections('enablebanking', [
+      connectionFromSession({ id: 's1', aspspName: 'SpareBank 1 SMN', aspspCountry: 'NO', validUntil: '2027-03-25T00:00:00Z', status: 'active', lastSyncAt: null, lastError: null, accountCount: 1 }),
+    ]);
+    await store.syncAll();
+    store.editCard('eb-h1', { name: 'Hovedkonto', color: 'grad-5' });
+    await store.syncAll();
+    expect(store.data.accounts[0]).toMatchObject({ name: 'Hovedkonto', color: 'grad-5' });
+
+    store.deleteAccount('eb-h1');
+    await store.syncAll();
+    expect(store.data.accounts).toHaveLength(0);
+    expect(store.data.transactions).toHaveLength(0);
+  });
+
   it('rydder bankens visningsnavn på eldre transaksjoner', () => {
     const store = new SaldoStore(memoryRepository(), () => new Date('2026-09-26T17:00:00Z'), false);
     const old = { id: 't-old', accountId: 'a', externalId: 'x1', bookingDate: '2026-08-01', amount: -500, currency: 'NOK', counterparty: 'Udbetaling   PIZZA OTTO', description: '', status: 'booked' as const, category: 'annet' as const, kind: 'normal' as const, linkedTransactionId: null, userCategorized: false, userKind: false, isDemo: false, source: 'bank' as const };

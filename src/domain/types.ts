@@ -79,6 +79,10 @@ export interface Account {
   balanceUpdatedAt: IsoTimestamp | null;
   includedInOverview: boolean;
   card?: CardDetails;
+  /** Valgt kortfarge (id fra CARD_COLORS). */
+  color?: string;
+  /** Brukeren har gitt kontoen eget navn – beholdes ved oppdatering fra banken. */
+  nameEdited?: boolean;
   isDemo: boolean;
   source: DataSource;
 }
@@ -255,6 +259,8 @@ export interface BusinessData {
 
 export interface AppData {
   version: 1;
+  /** Bankkontoer/kort brukeren har slettet – legges ikke til igjen ved oppdatering. */
+  removedAccountIds?: string[];
   connections: Connection[];
   accounts: Account[];
   transactions: Transaction[];

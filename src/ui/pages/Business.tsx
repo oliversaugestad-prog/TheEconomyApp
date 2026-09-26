@@ -406,7 +406,7 @@ export function HoldingDialog({ holding, onClose, onSaved, scope = 'business' }:
   };
 
   return (
-    <Dialog open onClose={onClose} title={holding ? holding.name : 'Legg til aksje eller fond'}>
+    <Dialog open onClose={onClose} title={holding ? holding.name : scope === 'personal' ? 'Legg til aksje, fond eller krypto' : 'Legg til aksje eller fond'}>
       <form className="stack" onSubmit={submit} noValidate>
         {!holding && (
           <Segmented
@@ -448,7 +448,7 @@ export function HoldingDialog({ holding, onClose, onSaved, scope = 'business' }:
                 <span>Søk etter navn eller ticker</span>
                 <span className="search">
                   <Search size={18} aria-hidden="true" />
-                  <input id="holding-search" className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="F.eks. Equinor, AAPL eller Bitcoin" autoComplete="off" />
+                  <input id="holding-search" className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="F.eks. Equinor, KLP AksjeGlobal eller Bitcoin" autoComplete="off" />
                 </span>
               </label>
               {searching && (

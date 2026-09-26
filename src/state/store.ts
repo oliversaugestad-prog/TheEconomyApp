@@ -270,13 +270,42 @@ export class SaldoStore {
     }));
   }
 
+  /** Endrer navn, utsteder, siste fire siffer, kredittgrense og farge på et kort. */
+  editCard(accountId: string, patch: { name?: string; issuer?: string; last4?: string; creditLimit?: Minor | null; color?: string }) {
+    this.update((d) => ({
+      ...d,
+      accounts: d.accounts.map((a) => {
+        if (a.id !== accountId) return a;
+        const name = patch.name?.trim();
+        const renamed = !!name && name !== a.name;
+        return {
+          ...a,
+          name: name || a.name,
+          nameEdited: a.nameEdited || renamed,
+          color: patch.color ?? a.color,
+          card: a.card
+            ? {
+                ...a.card,
+                issuer: patch.issuer?.trim() || a.card.issuer,
+                last4: patch.last4 ?? a.card.last4,
+                creditLimit: patch.creditLimit !== undefined ? patch.creditLimit : a.card.creditLimit,
+              }
+            : a.card,
+        };
+      }),
+    }));
+  }
+
   deleteAccount(accountId: string) {
     this.update((d) => {
+      const removed = d.accounts.find((a) => a.id === accountId);
       const accounts = d.accounts.filter((a) => a.id !== accountId);
       const usedConns = new Set(accounts.map((a) => a.connectionId));
       return this.reclassify({
         ...d,
         accounts,
+        // Kontoer fra banken ville ellers kommet tilbake ved neste oppdatering.
+        removedAccountIds: removed?.source === 'bank' ? [...new Set([...(d.removedAccountIds ?? []), accountId])] : d.removedAccountIds,
         connections: d.connections.filter((c) => c.providerId !== 'manual' || usedConns.has(c.id)),
         transactions: d.transactions.filter((t) => t.accountId !== accountId),
         subscriptions: d.subscriptions.map((s) => (s.accountId === accountId ? { ...s, accountId: null } : s)),
@@ -554,8 +583,9 @@ export class SaldoStore {
       }
       let stats: MergeStats | undefined;
       this.update((d) => {
-        const accIds = outcome.accounts.map((a) => a.id);
-        const merged = mergeTransactions(d.transactions, outcome.transactions, {
+        const removed = new Set(d.removedAccountIds ?? []);
+        const accIds = outcome.accounts.map((a) => a.id).filter((id) => !removed.has(id));
+        const merged = mergeTransactions(d.transactions, outcome.transactions.filter((t) => !removed.has(t.accountId)), {
           pendingComplete: outcome.pendingComplete,
           accountIds: accIds,
         });
@@ -567,13 +597,16 @@ export class SaldoStore {
           const manualStatement = a.card?.statement?.source === 'manual' ? a.card.statement : null;
           return {
             ...fresh,
+            name: a.nameEdited ? a.name : fresh.name,
+            nameEdited: a.nameEdited,
+            color: a.color,
             includedInOverview: a.includedInOverview,
             card: fresh.card ? { ...fresh.card, statement: fresh.card.statement ?? manualStatement } : undefined,
           };
         });
         // Nye kontoer fra kilden (f.eks. første henting etter tilkobling) legges til.
         for (const fresh of outcome.accounts) {
-          if (!accounts.some((a) => a.id === fresh.id)) accounts.push(fresh);
+          if (!accounts.some((a) => a.id === fresh.id) && !removed.has(fresh.id)) accounts.push(fresh);
         }
         return this.reclassify({
           ...d,

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { APP_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
+import { currentAppUrl, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 
 let client: SupabaseClient | null = null;
 
@@ -21,7 +21,7 @@ export function supabase(): SupabaseClient {
 export async function sendLoginLink(email: string): Promise<void> {
   const { error } = await supabase().auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: APP_URL, shouldCreateUser: true },
+    options: { emailRedirectTo: currentAppUrl(), shouldCreateUser: true },
   });
   if (error) throw new Error(loginErrorText(error.message));
 }

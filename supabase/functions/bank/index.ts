@@ -15,7 +15,17 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CALLBACK_URL = `${SUPABASE_URL}/functions/v1/bank`;
 const MAX_CONSENT_SECONDS = 180 * 86_400;
-const ALLOWED_ORIGINS = [new URL(DEFAULT_APP_URL).origin, 'http://localhost:5173', 'http://localhost:4173'];
+const ALLOWED_ORIGINS = ['https://savest.no', 'https://www.savest.no', new URL(DEFAULT_APP_URL).origin, 'http://localhost:5173', 'http://localhost:4173'];
+
+/** Adressen appen ble åpnet fra, dersom den er en av våre egne. */
+function safeReturnUrl(value: unknown): string | null {
+  try {
+    const u = new URL(String(value));
+    return ALLOWED_ORIGINS.includes(u.origin) ? `${u.origin}${u.pathname}` : null;
+  } catch {
+    return null;
+  }
+}
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
@@ -155,12 +165,14 @@ async function handleCallback(req: Request): Promise<Response> {
   const state = url.searchParams.get('state');
   const code = url.searchParams.get('code');
   const bankError = url.searchParams.get('error');
-  const back = await appUrl();
+  let back = await appUrl();
   const redirect = (params: Record<string, string>) =>
     new Response(null, { status: 302, headers: { Location: `${back}#/kontoer?${new URLSearchParams(params)}` } });
 
   if (!state || !/^[0-9a-f-]{36}$/i.test(state)) return redirect({ bank: 'feil', melding: 'Ugyldig svar fra banken.' });
   const { data: st } = await admin.from('eb_auth_states').select('*').eq('state', state).maybeSingle();
+  // Send brukeren tilbake til adressen tilkoblingen ble startet fra.
+  back = safeReturnUrl(st?.return_url) ?? back;
   if (st) await admin.from('eb_auth_states').delete().eq('state', state);
   if (!st || Date.now() - new Date(st.created_at).getTime() > 3_600_000) {
     return redirect({ bank: 'feil', melding: 'Innloggingen tok for lang tid eller er allerede brukt. Prøv igjen.' });
@@ -342,7 +354,7 @@ async function handleAction(req: Request): Promise<Response> {
     const validUntil = new Date(Date.now() + (maxSeconds - 3600) * 1000).toISOString();
     const { data: st, error } = await admin
       .from('eb_auth_states')
-      .insert({ user_id: user.id, aspsp_name: name, aspsp_country: country })
+      .insert({ user_id: user.id, aspsp_name: name, aspsp_country: country, return_url: safeReturnUrl(body.returnUrl) })
       .select('state')
       .single();
     if (error) throw new HttpError(500, 'Kunne ikke starte tilkoblingen.');
