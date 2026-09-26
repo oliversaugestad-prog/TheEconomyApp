@@ -71,7 +71,7 @@ export function ImportPage() {
     const buf = await f.arrayBuffer();
     // Norske banker eksporterer ofte i Windows-1252 – prøv UTF-8 først.
     let content = new TextDecoder('utf-8').decode(buf);
-    if (content.includes('�')) content = new TextDecoder('windows-1252').decode(buf);
+    if (content.includes(String.fromCharCode(0xfffd))) content = new TextDecoder('windows-1252').decode(buf);
     load(content, f.name);
   };
 
