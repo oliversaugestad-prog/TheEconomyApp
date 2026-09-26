@@ -33,6 +33,11 @@ export type SyncOutcome =
       transactions: Transaction[];
       /** Kilden leverte komplett liste over reservasjoner for disse kontoene. */
       pendingComplete: boolean;
+      /**
+       * Periode kilden leverte komplett (fra og med denne datoen) for kontoene i `completeAccountIds`.
+       * Brukes til å rydde bort gamle kopier når banken gir en transaksjon ny ID.
+       */
+      window?: { from: string; accountIds: string[] };
     }
   | {
       ok: false;

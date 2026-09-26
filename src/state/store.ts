@@ -592,6 +592,7 @@ export class SaldoStore {
         const merged = mergeTransactions(d.transactions, outcome.transactions.filter((t) => !removed.has(t.accountId)), {
           pendingComplete: outcome.pendingComplete,
           accountIds: accIds,
+          window: outcome.window,
         });
         stats = merged.stats;
         const accounts = d.accounts.map((a) => {

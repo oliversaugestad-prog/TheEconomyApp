@@ -41,6 +41,37 @@ describe('mergeTransactions', () => {
     expect(r.transactions[0]).toMatchObject({ category: 'helse', userCategorized: true, id: pending.id });
   });
 
+  it('gjenkjenner transaksjon som banken har gitt ny ID, og rydder bort gamle kopier', () => {
+    const base = { accountId: 'sb1', amount: -525971, counterparty: 'American Express', bookingDate: '2026-09-14', source: 'bank' as const };
+    // Tidligere henting ga samme betaling to ulike ID-er
+    const a = tx({ ...base, externalId: 'id-a', category: 'annet' });
+    const b = tx({ ...base, externalId: 'id-b' });
+    const older = tx({ ...base, bookingDate: '2026-06-01', externalId: 'old' });
+    const fresh = tx({ ...base, externalId: 'id-c' });
+    const window = { from: '2026-09-01', accountIds: ['sb1'] };
+    const r = mergeTransactions([a, b, older], [fresh], { window });
+    const sept = r.transactions.filter((t) => t.bookingDate === '2026-09-14');
+    expect(sept).toHaveLength(1);
+    expect(sept[0]).toMatchObject({ id: a.id, externalId: 'id-c' });
+    // Utenfor hentevinduet røres ingenting
+    expect(r.transactions.some((t) => t.externalId === 'old')).toBe(true);
+    expect(r.stats.duplicatesRemoved).toBe(1);
+  });
+
+  it('beholder to like kjøp samme dag når banken oppgir begge', () => {
+    const base = { accountId: 'sb1', amount: -4500, counterparty: 'Nordland fylkeskomm', bookingDate: '2026-09-21', source: 'bank' as const };
+    const existing = [tx({ ...base, externalId: 'a' }), tx({ ...base, externalId: 'b' })];
+    const incoming = [tx({ ...base, externalId: 'c' }), tx({ ...base, externalId: 'd' })];
+    const r = mergeTransactions(existing, incoming, { window: { from: '2026-09-01', accountIds: ['sb1'] } });
+    expect(r.transactions).toHaveLength(2);
+  });
+
+  it('beholder poster banken ikke lenger nevner', () => {
+    const t = tx({ accountId: 'sb1', amount: -100, externalId: 'x', bookingDate: '2026-09-20', source: 'bank' });
+    const r = mergeTransactions([t], [], { window: { from: '2026-09-01', accountIds: ['sb1'] } });
+    expect(r.transactions).toHaveLength(1);
+  });
+
   it('fjerner kansellerte reservasjoner når kilden leverer komplett liste', () => {
     const pending = tx({ accountId: 'bruk', amount: -5000, externalId: 'p4', status: 'pending' });
     const r = mergeTransactions([pending], [], { pendingComplete: true, accountIds: ['bruk'] });

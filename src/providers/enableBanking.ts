@@ -86,6 +86,11 @@ export const enableBankingProvider: BankDataProvider = {
       transactions,
       // Reservasjoner fjernes bare for kontoer som faktisk ble hentet.
       pendingComplete: accounts.every((a) => !a.result.error),
+      // Serveren henter fra det seneste av `dateFrom` og 90 dager tilbake.
+      window: {
+        from: [dateFrom ?? '', addDays(today, -90)].sort().pop()!,
+        accountIds: accounts.filter((a) => !a.result.error).map((a) => a.account.id),
+      },
     };
   },
 };
