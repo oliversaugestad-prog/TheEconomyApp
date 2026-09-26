@@ -427,6 +427,11 @@ export class SaldoStore {
     await this.syncConnection(connectionId);
   }
 
+  /** Kjører kategorisering og gjenkjenning av overføringer på nytt (f.eks. etter en appoppdatering). */
+  refreshClassification() {
+    this.update((d) => this.reclassify(d));
+  }
+
   /** Viser en melding i statuslinjen. */
   notify(tone: 'ok' | 'warn' | 'error', text: string) {
     this.set({ syncMessage: { tone, text } }, false);

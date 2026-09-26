@@ -132,6 +132,8 @@ export interface Transaction {
   source: DataSource;
   /** Fingeravtrykk for CSV-import (duplikatkontroll). */
   importFingerprint?: string;
+  /** Kortets bransjekode (MCC) når banken oppgir den. */
+  mcc?: string | null;
 }
 
 export type BillingInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';

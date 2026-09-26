@@ -22,6 +22,28 @@ describe('ekte banktekster', () => {
     expect(guessCategory('Puregym Denmark As', '', -100)).toBe('abonnementer');
   });
 
+  it('kjenner igjen flere danske og norske steder og bransjekoder', () => {
+    expect(guessCategory('Udbetaling   FOETEX NOERREBRO', '', -1)).toBe('dagligvarer');
+    expect(guessCategory('Udbetaling   TM *TICKETMASTER', '', -1)).toBe('underholdning');
+    expect(guessCategory('Bk 5081 Gol', '', -1)).toBe('restaurant');
+    expect(guessCategory('Jysk Noerrebro D045', '', -1)).toBe('shopping');
+    expect(guessCategory('APCOA PARKING NORWAY AS', '', -1)).toBe('transport');
+    expect(guessCategory('SpotifySE', '', -1)).toBe('abonnementer');
+    expect(guessCategory('365 Noerrebrogade', 'Coop365 Kbh N N', -1)).toBe('dagligvarer');
+    expect(guessCategory('0019/LØNOVERFØRSEL', '', 1)).toBe('lonn');
+    expect(guessCategory('Ukjent butikk', '', -1, '5812')).toBe('restaurant');
+    expect(guessCategory('Ukjent butikk', '', -1, '5411')).toBe('dagligvarer');
+    expect(guessCategory('Ukjent butikk', '', -1, null)).toBe('annet');
+  });
+
+  it('eget navn kjennes igjen uten mellomnavn, men ikke familie med samme etternavn', () => {
+    const acc = account({ id: 'sb', name: 'Brukskonto' });
+    const own = tx({ accountId: 'sb', amount: -50000, counterparty: 'Til: 1229 56 59775', description: 'Ola Hansen' });
+    const fam = tx({ accountId: 'sb', amount: 20000, counterparty: 'Kari Nordmann Hansen' });
+    const res = classifyTransactions([own, fam], [acc], [], ['Ola Nordmann Hansen']);
+    expect(res.map((t) => t.kind)).toEqual(['internal_transfer', 'normal']);
+  });
+
   it('valutaveksling og overføringer til eget navn er ikke forbruk', () => {
     const rev = account({ id: 'rev', name: 'Revolut NOK', currency: 'NOK' });
     const t1 = tx({ accountId: 'rev', amount: -50000, counterparty: 'Exchanged to DKK' });

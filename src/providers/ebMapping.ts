@@ -46,6 +46,8 @@ export interface EbTransaction {
   debtor?: { name?: string | null } | null;
   remittance_information?: string[] | null;
   bank_transaction_code?: { description?: string | null } | null;
+  merchant_category_code?: string | null;
+  note?: string | null;
 }
 
 export interface EbAccountResult {
@@ -155,7 +157,7 @@ export function mapTransactions(r: EbAccountResult, accountId: string, currency:
     if (raw === null) continue;
     const debit = t.credit_debit_indicator === 'DBIT' || (t.credit_debit_indicator == null && raw < 0);
     const amount = debit ? -Math.abs(raw) : Math.abs(raw);
-    const remittance = (t.remittance_information ?? []).filter(Boolean).join(' ').trim();
+    const remittance = [...(t.remittance_information ?? []), t.note ?? ''].filter(Boolean).join(' ').trim();
     const party = debit ? t.creditor?.name : t.debtor?.name;
     const counterparty = cleanCounterparty(party || remittance || t.bank_transaction_code?.description || '').slice(0, 140) || 'Ukjent';
     const date = txDate(t, today);
@@ -185,6 +187,7 @@ export function mapTransactions(r: EbAccountResult, accountId: string, currency:
       userKind: false,
       isDemo: false,
       source: 'bank',
+      mcc: t.merchant_category_code ?? null,
     });
   }
   return out;
