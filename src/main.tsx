@@ -51,6 +51,8 @@ function Root() {
         if (session) {
           const remote = await loadRemote(session.user.id);
           const store = new SaldoStore(remoteRepository(session.user.id, remote), undefined, false);
+          // Nye regler for kategorier og overføringer tas i bruk straks appen åpnes.
+          if (remote) store.refreshClassification();
           if (!cancelled) {
             setBoot({
               kind: 'app',

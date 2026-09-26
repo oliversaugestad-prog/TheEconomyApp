@@ -129,17 +129,34 @@ export function mergeTransactions(
   return { transactions: result.filter((_, i) => !removed.has(i)), stats };
 }
 
-const TRANSFER_HINT = /(overf|transfer|egen konto|egne konto|innbetaling kort|kredittkort|kreditt as|nedbetaling|sparing|bsu|fra konto|til konto|faktura kort|kortfaktura|top.?up|påfyll|revolut|sent from|exchanged)/i;
+const TRANSFER_HINT = /(overf|transfer|egen konto|egne konto|innbetaling kort|kredittkort|kreditt as|kredittbank|nedbetaling|sparing|bsu|fra konto|til konto|faktura kort|kortfaktura|top.?up|påfyll|revolut|sent from|exchanged)/i;
 /** Veksling mellom valutakontoer hos samme bank (f.eks. Revolut) – flytting av egne penger. */
 const EXCHANGE = /^(exchanged (to|from)|exchange (to|from)|valutaveksling|veksling)\b/i;
 const REFUND_HINT = /(refusjon|retur|refund|tilbakebetal|kreditering|reklamasjon)/i;
 const TRANSFER_MAX_DAYS = 3;
 const REFUND_MAX_DAYS = 90;
 
-function hasTransferHint(t: Transaction, accounts: Map<string, Account>, ownKeys: Set<string>): boolean {
+/**
+ * Navn som tilhører brukeren. Treff krever både første og siste del av navnet,
+ * slik at «Oliver Saugestad» kjennes igjen fra «Oliver Lundereng Saugestad»,
+ * men ikke familiemedlemmer med samme etternavn.
+ */
+function ownNameMatcher(ownNames: string[]): (text: string) => boolean {
+  const pairs = ownNames
+    .map((n) => normalizeCounterparty(n).split(' ').filter(Boolean))
+    .filter((parts) => parts.length >= 2)
+    .map((parts) => [parts[0], parts[parts.length - 1]]);
+  return (text: string) => {
+    if (!text || !pairs.length) return false;
+    const words = new Set(normalizeCounterparty(text).split(' '));
+    return pairs.some(([first, last]) => words.has(first) && words.has(last));
+  };
+}
+
+function hasTransferHint(t: Transaction, accounts: Map<string, Account>, isOwn: (text: string) => boolean): boolean {
   const text = `${t.counterparty} ${t.description}`;
   if (TRANSFER_HINT.test(text)) return true;
-  if (ownKeys.has(normalizeCounterparty(t.counterparty))) return true;
+  if (isOwn(t.counterparty) || isOwn(t.description)) return true;
   // Mottaker er navnet på en av brukerens egne kontoer.
   const lower = text.toLowerCase();
   for (const a of accounts.values()) {
@@ -167,14 +184,14 @@ export function classifyTransactions(
   ownNames: string[] = [],
 ): Transaction[] {
   const accounts = new Map(accountsList.map((a) => [a.id, a]));
-  const ownKeys = new Set(ownNames.map(normalizeCounterparty).filter((k) => k.length > 2));
+  const isOwn = ownNameMatcher(ownNames);
   const ruleByKey = new Map(rules.map((r) => [r.matchKey, r.category]));
 
   const txs = transactions.map((t) => {
     let next = t;
     if (!t.userCategorized) {
       const key = normalizeCounterparty(t.counterparty);
-      const cat = ruleByKey.get(key) ?? guessCategory(t.counterparty, t.description, t.amount);
+      const cat = ruleByKey.get(key) ?? guessCategory(t.counterparty, t.description, t.amount, t.mcc);
       if (cat !== t.category) next = { ...next, category: cat };
     }
     if (!t.userKind && t.kind !== 'normal') {
@@ -209,7 +226,7 @@ export function classifyTransactions(
       if (!accounts.has(inn.accountId)) continue;
       const diff = Math.abs(daysBetween(out.bookingDate, inn.bookingDate));
       if (diff > TRANSFER_MAX_DAYS) continue;
-      if (!hasTransferHint(out, accounts, ownKeys) && !hasTransferHint(inn, accounts, ownKeys)) continue;
+      if (!hasTransferHint(out, accounts, isOwn) && !hasTransferHint(inn, accounts, isOwn)) continue;
       if (diff < bestDiff) {
         best = j;
         bestDiff = diff;
@@ -244,7 +261,12 @@ export function classifyTransactions(
   for (const i of order) {
     const t = txs[i];
     if (t.userKind || t.kind !== 'normal' || linked.has(i)) continue;
-    if (EXCHANGE.test(t.counterparty.trim()) || EXCHANGE.test(t.description.trim()) || ownKeys.has(normalizeCounterparty(t.counterparty))) {
+    if (
+      EXCHANGE.test(t.counterparty.trim()) ||
+      EXCHANGE.test(t.description.trim()) ||
+      isOwn(t.counterparty) ||
+      (/^til:?\s*[\d\s.]+$/i.test(t.counterparty.trim()) && isOwn(t.description))
+    ) {
       txs[i] = { ...t, kind: 'internal_transfer', linkedTransactionId: null };
     }
   }
