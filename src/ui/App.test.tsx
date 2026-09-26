@@ -259,3 +259,28 @@ describe('Rediger kredittkort', () => {
     expect(store.data.accounts.some((a) => a.id === 'demo-card-visa')).toBe(false);
   });
 });
+
+describe('Import fra Amex', () => {
+  it('oppretter kort fra importsiden og foreslår å snu fortegn', async () => {
+    const { user, store } = setup('/kontoer/import');
+    await user.click(screen.getByRole('button', { name: 'Nytt kredittkort' }));
+    const dialog = screen.getByRole('dialog', { name: 'Legg til konto manuelt' });
+    await user.type(within(dialog).getByLabelText('Bank / utsteder'), 'American Express');
+    await user.type(within(dialog).getByLabelText('Kontonavn'), 'Amex');
+    await user.click(within(dialog).getByRole('button', { name: 'Legg til' }));
+    const card = store.data.accounts.find((a) => a.name === 'Amex')!;
+    expect(card.type).toBe('credit_card');
+    expect(screen.getByLabelText('Transaksjonene gjelder')).toHaveValue(card.id);
+
+    await user.click(screen.getByText('Eller lim inn innhold'));
+    const csv = 'Dato,Beskrivelse,Beløp\n09/24/2026,SPOTIFY,109.00\n09/13/2026,REMA 1000,250.00\n09/02/2026,BETALING MOTTATT,-500.00';
+    await user.click(screen.getByLabelText('CSV-innhold'));
+    await user.paste(csv);
+    expect(screen.getByRole('checkbox', { name: /snu fortegn/ })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Importer 3 transaksjoner' }));
+    const txs = store.data.transactions.filter((t) => t.accountId === card.id);
+    expect(txs.map((t) => t.amount).sort((a, b) => a - b)).toEqual([-25000, -10900, 50000]);
+    // Innbetalingen til kortet er nedbetaling av gjeld, ikke inntekt
+    expect(txs.find((t) => t.amount === 50000)?.kind).toBe('card_payment');
+  });
+});

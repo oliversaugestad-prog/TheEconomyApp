@@ -256,6 +256,18 @@ export function classifyTransactions(
     if (card) txs[i] = { ...t, kind: 'card_payment', linkedTransactionId: null };
   }
 
+  // Innbetaling registrert på selve kortet (f.eks. «BETALING MOTTATT - TAKK» i en Amex-eksport)
+  // der betalingen fra bankkontoen ikke finnes i Saldo. Det er nedbetaling av gjeld, ikke inntekt.
+  for (const i of order) {
+    const t = txs[i];
+    if (t.amount <= 0 || t.userKind || t.kind !== 'normal' || linked.has(i)) continue;
+    if (accounts.get(t.accountId)?.type !== 'credit_card') continue;
+    const text = `${t.counterparty} ${t.description}`.toLowerCase();
+    if (/(betaling mottatt|innbetaling|payment received|thank you|takk for betaling|autogiro|avtalegiro)/.test(text)) {
+      txs[i] = { ...t, kind: 'card_payment', linkedTransactionId: null };
+    }
+  }
+
   // Valutaveksling og overføringer til/fra deg selv der motposten ikke finnes i Saldo
   // (f.eks. en konto i en bank som ikke er koblet til, eller en annen valuta).
   for (const i of order) {
