@@ -1,4 +1,4 @@
-import { guessCategory, normalizeCounterparty } from './categories';
+import { findRule, guessCategory, normalizeCounterparty } from './categories';
 import { daysBetween } from './dates';
 import type { Account, CategoryRule, Transaction } from './types';
 
@@ -185,13 +185,11 @@ export function classifyTransactions(
 ): Transaction[] {
   const accounts = new Map(accountsList.map((a) => [a.id, a]));
   const isOwn = ownNameMatcher(ownNames);
-  const ruleByKey = new Map(rules.map((r) => [r.matchKey, r.category]));
 
   const txs = transactions.map((t) => {
     let next = t;
     if (!t.userCategorized) {
-      const key = normalizeCounterparty(t.counterparty);
-      const cat = ruleByKey.get(key) ?? guessCategory(t.counterparty, t.description, t.amount, t.mcc);
+      const cat = findRule(rules, t.counterparty)?.category ?? guessCategory(t.counterparty, t.description, t.amount, t.mcc);
       if (cat !== t.category) next = { ...next, category: cat };
     }
     if (!t.userKind && t.kind !== 'normal') {

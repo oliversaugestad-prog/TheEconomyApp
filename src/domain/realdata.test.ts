@@ -1,6 +1,6 @@
 import { account, tx } from '../test/factories';
 import { balanceSummary } from './calculations';
-import { guessCategory, normalizeCounterparty } from './categories';
+import { findRule, guessCategory, normalizeCounterparty, suggestRuleKey } from './categories';
 import { classifyTransactions } from './reconcile';
 import { defaultSettings } from '../storage/repository';
 import { mapTransactions } from '../providers/ebMapping';
@@ -88,5 +88,16 @@ describe('ekte banktekster', () => {
       '2026-09-26',
     );
     expect(t.map((x) => x.bookingDate)).toEqual(['2026-09-26', '2026-09-28']);
+  });
+});
+
+describe('regler for lignende kjøp', () => {
+  it('foreslår kjedenavnet og treffer andre butikker i samme kjede', () => {
+    expect(suggestRuleKey('Zara KBH K - 3115 Koebenhavn K')).toBe('zara');
+    expect(suggestRuleKey('Den norske legeforening')).toBe('den norske');
+    expect(suggestRuleKey('END. CLOTHING NEWCASTLE UPON')).toBe('end clothing');
+    const rules = [{ id: 'r', matchKey: 'zara', category: 'shopping' as const, createdAt: '' }];
+    expect(findRule(rules, 'Zara Fisketorvet - 9134 Koebenhavn V')?.category).toBe('shopping');
+    expect(findRule(rules, 'Zaragoza Tapas')).toBeUndefined();
   });
 });

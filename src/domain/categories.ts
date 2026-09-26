@@ -1,4 +1,4 @@
-import type { CategoryId } from './types';
+import type { CategoryId, CategoryRule } from './types';
 
 export interface CategoryInfo {
   id: CategoryId;
@@ -105,4 +105,31 @@ export function guessCategory(counterparty: string, description: string, amount:
     if (fromMcc) return fromMcc;
   }
   return amount > 0 ? 'annen_inntekt' : 'annet';
+}
+
+/** Ord som ikke sier noe om butikken alene («www.», «den», kortterminal-prefikser o.l.). */
+const GENERIC_WORDS = new Set(['www', 'the', 'den', 'det', 'de', 'sp', 'dk', 'no', 'se', 'uk', 'nets', 'bs', 'pos', 'ab', 'as']);
+
+/**
+ * Foreslått regelnøkkel for «lignende kjøp»: første meningsfulle ord (f.eks. «zara» for
+ * «Zara KBH K - 3115» og «Zara Fisketorvet»), eller de to første når første ord er kort.
+ */
+export function suggestRuleKey(counterparty: string): string {
+  const words = normalizeCounterparty(counterparty).split(' ').filter(Boolean);
+  const first = words.findIndex((w) => !GENERIC_WORDS.has(w));
+  if (first < 0) return words.join(' ');
+  // Regelen matcher fra starten av navnet, så eventuelle innledende småord tas med.
+  const end = words[first].length >= 4 || first + 1 >= words.length ? first + 1 : first + 2;
+  return words.slice(0, end).join(' ');
+}
+
+/** Om en regel gjelder mottakeren: lik nøkkel, eller mottakeren starter med regelens ord. */
+export function ruleMatches(ruleKey: string, counterparty: string): boolean {
+  const key = normalizeCounterparty(counterparty);
+  return key === ruleKey || key.startsWith(`${ruleKey} `);
+}
+
+/** Regelen som gjelder – den mest presise (lengste) vinner. */
+export function findRule(rules: CategoryRule[], counterparty: string): CategoryRule | undefined {
+  return rules.filter((r) => r.matchKey && ruleMatches(r.matchKey, counterparty)).sort((a, b) => b.matchKey.length - a.matchKey.length)[0];
 }

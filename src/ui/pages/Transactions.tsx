@@ -19,7 +19,7 @@ import { useData, useToday } from '../../state/StoreContext';
 import { CategoryBars } from '../charts/CategoryBars';
 import { IncomeExpenseChart } from '../charts/IncomeExpenseChart';
 import { Amount } from '../components/Amount';
-import { Empty, Segmented } from '../components/common';
+import { Empty, Notice, Segmented } from '../components/common';
 import { TransactionDetail } from '../components/TransactionViews';
 import { Page } from '../Layout';
 import { GroupedTransactions } from './AccountDetail';
@@ -92,13 +92,7 @@ export function TransactionsPage() {
               aria-label="Søk i transaksjoner"
             />
           </div>
-          <button
-            type="button"
-            className="btn"
-            aria-expanded={showFilters}
-            aria-controls="tx-filters"
-            onClick={() => setShowFilters((v) => !v)}
-          >
+          <button type="button" className="btn" aria-expanded={showFilters} aria-controls="tx-filters" onClick={() => setShowFilters((v) => !v)}>
             <SlidersHorizontal size={18} aria-hidden="true" />
             <span className="desktop-only">Filter</span>
             {activeFilters.length > 0 && <span className="badge accent">{activeFilters.length}</span>}
@@ -240,12 +234,20 @@ export function TransactionsPage() {
               )}
             </div>
             {breakdown.length ? (
-              <CategoryBars shares={breakdown} currency={base} onSelect={(c) => set({ category: filter.category === c ? null : c })} selected={filter.category} />
+              <CategoryBars
+                shares={breakdown}
+                currency={base}
+                onSelect={(c) => {
+                  set({ category: c });
+                  setView('list');
+                }}
+                selected={filter.category}
+              />
             ) : (
               <Empty icon={<Receipt size={22} />} title="Ingen utgifter i utvalget" />
             )}
             <p className="xsmall subtle" style={{ marginTop: 12 }}>
-              Trykk på en kategori for å filtrere. Refusjoner er trukket fra i kategorien de hører til.
+              Trykk på en kategori for å se transaksjonene. Refusjoner er trukket fra i kategorien de hører til.
             </p>
           </section>
           <section className="card">
@@ -256,34 +258,39 @@ export function TransactionsPage() {
           </section>
         </div>
       ) : (
-        <section className="card flush" aria-label="Transaksjonsliste">
-          {filtered.length ? (
-            <>
-              <GroupedTransactions transactions={filtered.slice(0, limit)} onOpen={setOpenTx} />
-              {filtered.length > limit && (
-                <div style={{ padding: 16, textAlign: 'center' }}>
-                  <button type="button" className="btn" onClick={() => setLimit((l) => l + PAGE_SIZE)}>
-                    Vis flere ({filtered.length - limit} til)
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <Empty
-              icon={<Search size={22} />}
-              title={data.transactions.length ? 'Ingen treff' : 'Ingen transaksjoner ennå'}
-              action={
-                data.transactions.length ? (
-                  <button type="button" className="btn small" onClick={() => setFilter(EMPTY_FILTER)}>
-                    Nullstill søk og filtre
-                  </button>
-                ) : undefined
-              }
-            >
-              {data.transactions.length ? 'Prøv et annet søk eller fjern noen filtre.' : 'Legg til en konto og importer transaksjoner fra CSV.'}
-            </Empty>
+        <>
+          {filter.category === 'annet' && filtered.length > 0 && (
+            <Notice title="Hjelp Saldo å lære">Trykk på en transaksjon og velg riktig kategori. Valget huskes, så lignende kjøp havner i samme kategori automatisk – også tidligere kjøp.</Notice>
           )}
-        </section>
+          <section className="card flush" aria-label="Transaksjonsliste">
+            {filtered.length ? (
+              <>
+                <GroupedTransactions transactions={filtered.slice(0, limit)} onOpen={setOpenTx} />
+                {filtered.length > limit && (
+                  <div style={{ padding: 16, textAlign: 'center' }}>
+                    <button type="button" className="btn" onClick={() => setLimit((l) => l + PAGE_SIZE)}>
+                      Vis flere ({filtered.length - limit} til)
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <Empty
+                icon={<Search size={22} />}
+                title={data.transactions.length ? 'Ingen treff' : 'Ingen transaksjoner ennå'}
+                action={
+                  data.transactions.length ? (
+                    <button type="button" className="btn small" onClick={() => setFilter(EMPTY_FILTER)}>
+                      Nullstill søk og filtre
+                    </button>
+                  ) : undefined
+                }
+              >
+                {data.transactions.length ? 'Prøv et annet søk eller fjern noen filtre.' : 'Legg til en konto og importer transaksjoner fra CSV.'}
+              </Empty>
+            )}
+          </section>
+        </>
       )}
 
       {openTx && <TransactionDetail key={openTx.id} tx={openTx} onClose={() => setOpenTx(null)} />}
