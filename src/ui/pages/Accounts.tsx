@@ -1,4 +1,4 @@
-import { Briefcase, FileUp, Landmark, Link2, Plus, RefreshCw, Unplug } from 'lucide-react';
+import { Briefcase, FileUp, Landmark, Link2, Plus, RefreshCw, TrendingUp, Unplug } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { availableCredit, bookedOrAvailable, cardDebt, reservedAmount } from '../../domain/calculations';
@@ -61,6 +61,9 @@ export function AccountsPage() {
         <button type="button" className="btn small" onClick={() => setConnecting(true)}>
           <Link2 size={16} aria-hidden="true" /> Koble til bank
         </button>
+        <Link to="/formue?ny=aksje" className="btn small">
+          <TrendingUp size={16} aria-hidden="true" /> Aksjer, fond og krypto
+        </Link>
         <Link to="/bedrift" className="btn small mobile-only">
           <Briefcase size={16} aria-hidden="true" /> Bedrift
         </Link>

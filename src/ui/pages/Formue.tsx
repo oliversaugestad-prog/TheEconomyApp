@@ -1,12 +1,13 @@
 import { Briefcase, Building2, ChevronRight, CreditCard, Landmark, PiggyBank, Plus, RefreshCw, Wallet } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { emptyBusiness } from '../../domain/business';
 import { bookedOrAvailable, cardDebt, isBankAccount, isCard } from '../../domain/calculations';
 import { formatTimestamp } from '../../domain/dates';
 import { netWorth } from '../../domain/netWorth';
 import type { BusinessItem, Holding } from '../../domain/types';
 import { useData, useStore } from '../../state/StoreContext';
+import { AddAccountDialog } from '../components/AccountForms';
 import { Amount } from '../components/Amount';
 import { Dialog } from '../components/Dialog';
 import { Initials, Notice, Segmented } from '../components/common';
@@ -41,6 +42,16 @@ export function FormuePage() {
   const [editingHolding, setEditingHolding] = useState<Holding | 'new' | null>(null);
   const [editingItem, setEditingItem] = useState<BusinessItem | BusinessItem['kind'] | null>(null);
   const [editingOwnership, setEditingOwnership] = useState(false);
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [params, setParams] = useSearchParams();
+
+  // Snarvei fra Kontoer: /formue?ny=aksje åpner «Legg til aksje, fond eller krypto».
+  useEffect(() => {
+    if (params.get('ny') === 'aksje') {
+      setEditingHolding('new');
+      setParams({}, { replace: true });
+    }
+  }, [params, setParams]);
 
   const includeBiz = !!nw.business && withBusiness === 'with';
   const total = includeBiz ? nw.totalWithBusiness : nw.total;
@@ -144,9 +155,9 @@ export function FormuePage() {
         <section className="card flush" aria-labelledby="nw-bank">
           <div className="card-head" style={{ padding: '18px 18px 0' }}>
             <h2 id="nw-bank">Bankkontoer</h2>
-            <Link to="/kontoer" className="link">
-              Alle kontoer
-            </Link>
+            <button type="button" className="btn small" onClick={() => setAddingAccount(true)} aria-label="Legg til konto, f.eks. BSU eller sparekonto">
+              <Plus size={16} aria-hidden="true" /> Konto
+            </button>
           </div>
           {bankAccounts.length ? (
             <ul className="list" style={{ marginTop: 8 }}>
@@ -176,7 +187,7 @@ export function FormuePage() {
             </p>
           )}
           <p className="xsmall subtle" style={{ padding: '10px 18px 16px' }}>
-            Hentes automatisk fra bankene du har koblet til. Kontoer du har skjult fra oversikten er ikke med.
+            Hentes automatisk fra bankene du har koblet til. BSU- og sparekontoer i andre banker legger du til med «Konto». <Link to="/kontoer">Alle kontoer</Link>
           </p>
         </section>
 
@@ -204,7 +215,7 @@ export function FormuePage() {
             </ul>
           ) : (
             <p className="small muted" style={{ padding: '10px 18px 0' }}>
-              Legg inn beholdningen din fra Nordnet, DNB, Coinbase eller andre. Søk opp aksjen, fondet eller kryptovalutaen (f.eks. «Bitcoin»), og oppgi antall – verdien følger markedskursen.
+              Legg inn beholdningen din fra Nordnet, DNB, Coinbase eller andre. Søk opp aksjen, fondet (f.eks. «KLP AksjeGlobal») eller kryptovalutaen (f.eks. «Bitcoin»), og oppgi antall andeler – verdien følger markedskursen.
             </p>
           )}
           <p className="xsmall subtle" style={{ padding: '10px 18px 16px' }}>
@@ -344,6 +355,7 @@ export function FormuePage() {
           onClose={() => setEditingItem(null)}
         />
       )}
+      <AddAccountDialog open={addingAccount} initialType="bsu" onClose={() => setAddingAccount(false)} />
       {editingOwnership && (
         <OwnershipDialog
           value={nw.ownership}

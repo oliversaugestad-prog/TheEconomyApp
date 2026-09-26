@@ -15,9 +15,23 @@ import { TransactionDetail } from '../components/TransactionViews';
 import { Page } from '../Layout';
 import { GroupedTransactions } from './AccountDetail';
 
-function gradientFor(id: string): string {
+/** Kortfarger brukeren kan velge mellom. */
+export const CARD_COLORS: { id: string; label: string }[] = [
+  { id: 'grad-0', label: 'Blå' },
+  { id: 'grad-1', label: 'Grønn' },
+  { id: 'grad-2', label: 'Lilla' },
+  { id: 'grad-3', label: 'Grafitt' },
+  { id: 'grad-4', label: 'Korall' },
+  { id: 'grad-5', label: 'Gull' },
+  { id: 'grad-6', label: 'Rosa' },
+  { id: 'grad-7', label: 'Sort' },
+  { id: 'grad-8', label: 'Sølv' },
+];
+
+function gradientFor(card: Pick<Account, 'id' | 'color'>): string {
+  if (card.color && CARD_COLORS.some((c) => c.id === card.color)) return card.color;
   let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  for (const c of card.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return `grad-${h % 4}`;
 }
 
@@ -57,11 +71,11 @@ export function PayCard({ card, link }: { card: Account; link?: boolean }) {
     </>
   );
   return link ? (
-    <Link to={`/kort/${card.id}`} className={`pay-card ${gradientFor(card.id)}`} aria-label={`${card.name}, se detaljer`}>
+    <Link to={`/kort/${card.id}`} className={`pay-card ${gradientFor(card)}`} aria-label={`${card.name}, se detaljer`}>
       {content}
     </Link>
   ) : (
-    <div className={`pay-card ${gradientFor(card.id)}`}>{content}</div>
+    <div className={`pay-card ${gradientFor(card)}`}>{content}</div>
   );
 }
 
@@ -183,6 +197,8 @@ export function CardDetailPage() {
   const card = data.accounts.find((a) => a.id === id && a.type === 'credit_card');
   const [openTx, setOpenTx] = useState<Transaction | null>(null);
   const [editStatement, setEditStatement] = useState(false);
+  const [editingCard, setEditingCard] = useState(false);
+  const navigate = useNavigate();
   const txs = useMemo(() => (card ? sortByDateDesc(data.transactions.filter((t) => t.accountId === card.id)) : []), [data.transactions, card]);
 
   if (!card) {
@@ -199,7 +215,16 @@ export function CardDetailPage() {
   const month = monthKey(today);
 
   return (
-    <Page title={card.name} back={{ to: '/kort', label: 'Tilbake til kort' }}>
+    <Page
+      title={card.name}
+      back={{ to: '/kort', label: 'Tilbake til kort' }}
+      actions={
+        <button type="button" className="btn small" onClick={() => setEditingCard(true)}>
+          <Pencil size={16} aria-hidden="true" /> Rediger
+        </button>
+      }
+    >
+      {editingCard && <EditCardDialog card={card} manual={!conn || conn.providerId === 'manual'} onClose={() => setEditingCard(false)} onDeleted={() => navigate('/kort')} />}
       <div className="grid cols-2">
         <div className="stack">
           <PayCard card={card} />
@@ -357,6 +382,133 @@ function StatementDialog({ card, onClose, onSave }: { card: Account; onClose: ()
           ) : (
             <span />
           )}
+          <div className="row">
+            <button type="button" className="btn ghost" onClick={onClose}>
+              Avbryt
+            </button>
+            <button type="submit" className="btn primary">
+              Lagre
+            </button>
+          </div>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+function EditCardDialog({ card, manual, onClose, onDeleted }: { card: Account; manual: boolean; onClose: () => void; onDeleted: () => void }) {
+  const store = useStore();
+  const [name, setName] = useState(card.name);
+  const [issuer, setIssuer] = useState(card.card?.issuer ?? card.bankName);
+  const [last4, setLast4] = useState(card.card?.last4 ?? '');
+  const [limit, setLimit] = useState(card.card?.creditLimit != null ? formatMoney(card.card.creditLimit, card.currency).replace(/[^\d,\s]/g, '').trim() : '');
+  const [debt, setDebt] = useState(card.bookedBalance != null ? formatMoney(-card.bookedBalance, card.currency).replace(/[^\d,\-−\s]/g, '').replace(/−/g, '-').trim() : '');
+  const [color, setColor] = useState(gradientFor(card));
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return setError('Gi kortet et navn.');
+    if (last4 && !/^\d{4}$/.test(last4)) return setError('Oppgi nøyaktig fire siffer – ikke hele kortnummeret.');
+    const limitMinor = limit.trim() ? parseAmount(limit, card.currency) : null;
+    if (limit.trim() && limitMinor === null) return setError('Ugyldig kredittgrense.');
+    const debtMinor = debt.trim() ? parseAmount(debt, card.currency) : null;
+    if (manual && debt.trim() && debtMinor === null) return setError('Ugyldig gjeld.');
+    store.editCard(card.id, { name, issuer: manual ? issuer : undefined, last4: manual ? last4 : undefined, creditLimit: limitMinor, color });
+    if (manual) store.updateBalance(card.id, debtMinor === null ? null : -Math.abs(debtMinor), card.availableBalance);
+    onClose();
+  };
+
+  if (confirmDelete) {
+    return (
+      <Dialog open onClose={onClose} title={`Slette ${card.name}?`}>
+        <div className="stack">
+          <p className="small">
+            {manual
+              ? 'Kortet og transaksjonene som er importert til det, slettes fra Saldo.'
+              : 'Kortet og transaksjonene fjernes fra Saldo og hentes ikke inn igjen ved oppdatering. Banktilkoblingen for de andre kontoene fortsetter som før.'}{' '}
+            Selve kortet hos {card.card?.issuer ?? card.bankName} påvirkes ikke.
+          </p>
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="btn ghost" onClick={() => setConfirmDelete(false)}>
+              Avbryt
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={() => {
+                onDeleted();
+                store.deleteAccount(card.id);
+              }}
+            >
+              Ja, slett kortet
+            </button>
+          </div>
+        </div>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="Rediger kort">
+      <form className="stack" onSubmit={submit} noValidate>
+        <div className={`pay-card ${color}`} style={{ minHeight: 0, aspectRatio: 'auto', padding: '16px 18px' }} aria-hidden="true">
+          <div className="spread">
+            <span className="pc-issuer">{issuer || card.bankName}</span>
+            <span className="pc-number">•••• {last4 || '····'}</span>
+          </div>
+          <span style={{ fontWeight: 600, marginTop: 18, display: 'block' }}>{name || 'Kortnavn'}</span>
+        </div>
+        <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend style={{ marginBottom: 8 }}>Farge</legend>
+          <div className="swatches">
+            {CARD_COLORS.map((c) => (
+              <label key={c.id} className={`swatch ${c.id}${color === c.id ? ' on' : ''}`} title={c.label}>
+                <input type="radio" name="card-color" value={c.id} checked={color === c.id} onChange={() => setColor(c.id)} className="sr-only" />
+                <span className="sr-only">{c.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div className="form-grid two">
+          <label className="field">
+            <span>Navn på kortet</span>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="F.eks. Amex Gold" />
+          </label>
+          {manual && (
+            <label className="field">
+              <span>Utsteder</span>
+              <input className="input" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="F.eks. American Express" />
+            </label>
+          )}
+          {manual && (
+            <label className="field">
+              <span>Utestående gjeld ({card.currency})</span>
+              <input className="input" inputMode="decimal" value={debt} onChange={(e) => setDebt(e.target.value)} placeholder="Tomt = ukjent" />
+            </label>
+          )}
+          <label className="field">
+            <span>Kredittgrense ({card.currency})</span>
+            <input className="input" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="Valgfritt" />
+          </label>
+          {manual && (
+            <label className="field">
+              <span>Siste fire siffer</span>
+              <input className="input" inputMode="numeric" maxLength={4} value={last4} onChange={(e) => setLast4(e.target.value.replace(/\D/g, ''))} placeholder="1234" />
+            </label>
+          )}
+        </div>
+        {!manual && <p className="xsmall subtle">Gjeld og kortnummer hentes fra banken. Navn og farge du velger beholdes når kortet oppdateres.</p>}
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="row wrap" style={{ justifyContent: 'space-between' }}>
+          <button type="button" className="btn danger small" onClick={() => setConfirmDelete(true)}>
+            Slett kort
+          </button>
           <div className="row">
             <button type="button" className="btn ghost" onClick={onClose}>
               Avbryt

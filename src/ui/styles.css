@@ -1321,6 +1321,41 @@ a.pay-card:hover {
 .grad-3 {
   background: linear-gradient(135deg, #1d1d24 0%, #3b3f4d 60%, #6b7285 100%);
 }
+.grad-4 {
+  background: linear-gradient(135deg, #3d1611 0%, #a8412f 55%, #c8503f 100%);
+}
+.grad-5 {
+  background: linear-gradient(135deg, #2e230b 0%, #7a5a14 55%, #9c7a2a 100%);
+}
+.grad-6 {
+  background: linear-gradient(135deg, #3a1027 0%, #8f2f63 55%, #b04a80 100%);
+}
+.grad-7 {
+  background: linear-gradient(135deg, #050507 0%, #15161b 60%, #2a2b33 100%);
+}
+.grad-8 {
+  background: linear-gradient(135deg, #2b2f38 0%, #5f6675 55%, #7f8796 100%);
+}
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.swatch.on {
+  border-color: var(--text);
+}
+.swatch:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .progress {
   height: 8px;

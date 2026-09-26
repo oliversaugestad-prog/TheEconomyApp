@@ -21,6 +21,7 @@ export async function startBankLogin(aspsp: Pick<AspspInfo, 'name' | 'country' |
     name: aspsp.name,
     country: aspsp.country,
     maxConsentSeconds: aspsp.maxConsentSeconds,
+    returnUrl: `${window.location.origin}${window.location.pathname}`,
   });
   window.location.assign(url);
 }

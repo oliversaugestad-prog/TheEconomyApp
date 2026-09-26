@@ -240,3 +240,22 @@ describe('Kredittkort manuelt', () => {
     expect(card).toMatchObject({ type: 'credit_card', bookedBalance: -450000 });
   });
 });
+
+describe('Rediger kredittkort', () => {
+  it('endrer navn, farge og gjeld, og sletter kortet', async () => {
+    const { user, store } = setup('/kort/demo-card-visa');
+    await user.click(screen.getByRole('button', { name: 'Rediger' }));
+    let dialog = screen.getByRole('dialog', { name: 'Rediger kort' });
+    await user.clear(within(dialog).getByLabelText('Navn på kortet'));
+    await user.type(within(dialog).getByLabelText('Navn på kortet'), 'Reisekort');
+    await user.click(within(dialog).getByRole('radio', { name: 'Korall' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+    expect(store.data.accounts.find((a) => a.id === 'demo-card-visa')).toMatchObject({ name: 'Reisekort', color: 'grad-4' });
+
+    await user.click(screen.getByRole('button', { name: 'Rediger' }));
+    dialog = screen.getByRole('dialog', { name: 'Rediger kort' });
+    await user.click(within(dialog).getByRole('button', { name: 'Slett kort' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Ja, slett kortet' }));
+    expect(store.data.accounts.some((a) => a.id === 'demo-card-visa')).toBe(false);
+  });
+});
