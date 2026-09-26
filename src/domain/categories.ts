@@ -21,6 +21,7 @@ export const CATEGORIES: CategoryInfo[] = [
   { id: 'underholdning', label: 'Underholdning', color: '#008300', type: 'expense' },
   { id: 'abonnementer', label: 'Abonnementer', color: '#9085e9', type: 'expense' },
   { id: 'restaurant', label: 'Mat ute', color: '#e66767', type: 'expense' },
+  { id: 'lan', label: 'Lån og renter', color: '#b8860b', type: 'expense' },
   { id: 'annet', label: 'Annet', color: '#6b7280', type: 'expense' },
   { id: 'lonn', label: 'Lønn', color: '#3987e5', type: 'income' },
   { id: 'annen_inntekt', label: 'Annen inntekt', color: '#199e70', type: 'income' },
@@ -61,13 +62,14 @@ export function normalizeCounterparty(name: string): string {
 const KEYWORDS: Array<[RegExp, CategoryId]> = [
   [/(lønn|lonn|løn|lønoverførsel|lønnsoverføring|dedicare)/, 'lonn'],
   [/\b(rema|kiwi|coop|coop365|extra|meny|spar|joker|bunnpris|oda|lidl|netto|føtex|fotex|foetex|bilka|ica|irma|fakta|aldi|7 eleven|7-eleven|narvesen|matkroken|dagligvare|dagligvarer|superbrugsen|lovbjerg|løvbjerg)\b/, 'dagligvarer'],
-  [/\b(ruter|ruterappen|vy|atb|skyss|kolumbus|entur|flytoget|flybussen|rejsekort|dsb|circle k|uno x|esso|shell|bolt|uber|ryde|voi|tier|lime|easypark|apcoa|parkering|parking|sas|norwegian|widerøe|wideroe|fylkeskomm)\b/, 'transport'],
-  [/(netflix|spotify|hbo|viaplay|disney|icloud|storytel|audible|youtube|tidal|aftenposten|adobe|puregym|eesy|anthropic|openai|plan fee|domene)|\b(max|apple(?! pay)|google(?! pay))\b/, 'abonnementer'],
+  [/\b(ruter|ruterappen|vy|atb|skyss|kolumbus|entur|flytoget|flybussen|rejsekort|dsb|circle k|uno x|esso|shell|bolt|uber|ryde|voi|tier|lime|easypark|apcoa|parkering|parking|sas|norwegian|widerøe|wideroe|fylkeskomm)\b|flysas|ryanair|airline|easyjet|klm|lufthansa/, 'transport'],
+  [/(netflix|spotify|hbo|viaplay|disney|icloud|storytel|audible|youtube|tidal|aftenposten|adobe|puregym|eesy|anthropic|openai|plan fee|domene|lovable|fly\.io|github|vercel|legeforening|kontingent)|\b(max|apple(?! pay)|google(?! pay))\b/, 'abonnementer'],
+  [/^(lnr|lånenr|lånenummer)\b|\b(avdrag|terminbeløp|lånekassen|renter lån)\b/, 'lan'],
   [/\b(husleie|eiendom|fjordkraft|tibber|elvia|strøm|borettslag|fellesutgifter)\b/, 'bolig'],
   [/\b(apotek|apotek 1|vitus|legevakt|lege|tannlege|boots|matas)\b/, 'helse'],
   [/(ticketmaster|nordisk film|billettservice|checkin|kino)|\b(steam|playstation|boulders|klatring|svømmehall|symjebasseng|museum|fotballfesten)\b/, 'underholdning'],
-  [/\b(zalando|elkjøp|power|xxl|h m|hm|clas ohlson|ikea|komplett|jernia|normal|jysk|bog ide|sport|skofabrikk|packyard)\b/, 'shopping'],
-  [/(restaurant|espresso house|joe the juice|joe  the juice|taphouse|burger king|mcdonald|foodora|wolt|just eat|starbucks|proud mary|take and eat|hmshost|oelbar|ølbar|tacos)|\b(restaurante|cafe|kafe|kafé|café|bakeri|bageri|bar|pub|bistro|pizza|sushi|burger|kebab|coffee|kaffe|peppes|kro|kroen|food|bk)\b/, 'restaurant'],
+  [/\b(zalando|elkjøp|power|xxl|h m|hm|clas ohlson|ikea|komplett|jernia|normal|jysk|bog ide|sport|skofabrikk|packyard|zara|clothing|fashion)\b/, 'shopping'],
+  [/(restaurant|espresso house|joe the juice|joe  the juice|taphouse|burger king|mcdonald|foodora|wolt|just eat|starbucks|proud mary|take and eat|hmshost|oelbar|ølbar|tacos)|\b(restaurante|cafe|kafe|kafé|café|bakeri|bageri|bar|pub|bistro|pizza|sushi|burger|kebab|coffee|kaffe|peppes|kro|kroen|food|bk|subway|sub bod)\b/, 'restaurant'],
   [/\b(sats|evo|elixia|telenor|telia|ice)\b/, 'abonnementer'],
 ];
 

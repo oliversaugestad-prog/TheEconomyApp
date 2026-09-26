@@ -275,7 +275,7 @@ export function OverviewPage() {
 
         <section className="card" aria-labelledby="cat-h">
           <div className="card-head">
-            <h2 id="cat-h">Utgifter per kategori</h2>
+            <h2 id="cat-h">Utgifter per kategori · {formatMonth(month)}</h2>
             <Link className="link" to="/transaksjoner?vis=analyse">
               Analyse
             </Link>

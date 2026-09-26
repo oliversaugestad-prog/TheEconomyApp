@@ -17,6 +17,14 @@ describe('ekte banktekster', () => {
   it('kategoriserer vanlige norske og danske mottakere', () => {
     expect(guessCategory('Udbetaling   LIDL1234NORDREFASAN', '', -100)).toBe('dagligvarer');
     expect(guessCategory('Apple Pay Top-Up by *7761', '', 200000)).not.toBe('abonnementer');
+    expect(guessCategory('FLYSAS STOCKHOLM', '', -100)).toBe('transport');
+    expect(guessCategory('RYANAIR LTD AIRLINE DUBLIN', '', -100)).toBe('transport');
+    expect(guessCategory('Zara KBH K - 3115 Koebenhavn K', '', -100)).toBe('shopping');
+    expect(guessCategory('END. CLOTHING NEWCASTLE UPON', '', -100)).toBe('shopping');
+    expect(guessCategory('Lnr: 001-093-0519-08', '', -100)).toBe('lan');
+    expect(guessCategory('LOVABLE DOVER', '', -100)).toBe('abonnementer');
+    expect(guessCategory('FLY.IO SAN FRANCISCO', '', -100)).toBe('abonnementer');
+    expect(guessCategory('Sub Bod As - A', '', -100)).toBe('restaurant');
     expect(guessCategory('APPLE.COM/BILL', '', -2500)).toBe('abonnementer');
     expect(guessCategory('Vipps*Storytel', '', -100)).toBe('abonnementer');
     expect(guessCategory('Rejsekort Som App', '', -100)).toBe('transport');
