@@ -62,7 +62,7 @@ const KEYWORDS: Array<[RegExp, CategoryId]> = [
   [/(lønn|lonn|løn|lønoverførsel|lønnsoverføring|dedicare)/, 'lonn'],
   [/\b(rema|kiwi|coop|coop365|extra|meny|spar|joker|bunnpris|oda|lidl|netto|føtex|fotex|foetex|bilka|ica|irma|fakta|aldi|7 eleven|7-eleven|narvesen|matkroken|dagligvare|dagligvarer|superbrugsen|lovbjerg|løvbjerg)\b/, 'dagligvarer'],
   [/\b(ruter|ruterappen|vy|atb|skyss|kolumbus|entur|flytoget|flybussen|rejsekort|dsb|circle k|uno x|esso|shell|bolt|uber|ryde|voi|tier|lime|easypark|apcoa|parkering|parking|sas|norwegian|widerøe|wideroe|fylkeskomm)\b/, 'transport'],
-  [/(netflix|spotify|hbo|viaplay|disney|icloud|storytel|audible|youtube|tidal|aftenposten|adobe|puregym|eesy|anthropic|openai|plan fee|domene)|\b(max|apple|google)\b/, 'abonnementer'],
+  [/(netflix|spotify|hbo|viaplay|disney|icloud|storytel|audible|youtube|tidal|aftenposten|adobe|puregym|eesy|anthropic|openai|plan fee|domene)|\b(max|apple(?! pay)|google(?! pay))\b/, 'abonnementer'],
   [/\b(husleie|eiendom|fjordkraft|tibber|elvia|strøm|borettslag|fellesutgifter)\b/, 'bolig'],
   [/\b(apotek|apotek 1|vitus|legevakt|lege|tannlege|boots|matas)\b/, 'helse'],
   [/(ticketmaster|nordisk film|billettservice|checkin|kino)|\b(steam|playstation|boulders|klatring|svømmehall|symjebasseng|museum|fotballfesten)\b/, 'underholdning'],

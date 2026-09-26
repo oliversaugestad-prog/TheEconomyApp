@@ -16,6 +16,7 @@ import { daysBetween, formatDate, formatMonth, monthKey, relativeDay } from '../
 import { formatMoney } from '../../domain/money';
 import { chargesFor, detectPriceChange, subscriptionTotals } from '../../domain/subscriptions';
 import { summarizeBusiness } from '../../domain/business';
+import { netWorth } from '../../domain/netWorth';
 import { estimateRemaining, upcomingPayments } from '../../domain/upcoming';
 import type { Transaction } from '../../domain/types';
 import { useData, useSnapshot, useStore, useToday } from '../../state/StoreContext';
@@ -41,6 +42,7 @@ export function OverviewPage() {
 
   const balances = useMemo(() => balanceSummary(data), [data]);
   const business = data.business;
+  const worth = useMemo(() => netWorth(data), [data]);
   const businessSummary = useMemo(() => (business ? summarizeBusiness(business, base, data.rates) : null), [business, base, data.rates]);
   const txs = useMemo(() => overviewTransactions(data), [data]);
   const month = monthKey(today);
@@ -202,6 +204,15 @@ export function OverviewPage() {
             </span>
             <span className="m-foot">Se utregning</span>
           </button>
+          <Link to="/formue" className="metric" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <span className="m-label">
+              Nettoformue <IncompleteMark complete={worth.complete} />
+            </span>
+            <span className="m-value">
+              <Amount value={worth.business ? worth.totalWithBusiness : worth.total} currency={base} />
+            </span>
+            <span className="m-foot">{worth.business ? 'I ditt navn, med bedriften' : 'Alt i ditt navn'}</span>
+          </Link>
           {business && (business.items.length > 0 || business.holdings.length > 0) && (
             <Link to="/bedrift" className="metric" style={{ textDecoration: 'none', color: 'inherit' }}>
               <span className="m-label">{business.name}</span>

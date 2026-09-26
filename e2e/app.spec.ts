@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const ROUTES = ['/', '/kontoer', '/kontoer/demo-acc-bruk', '/kontoer/import', '/transaksjoner', '/abonnementer', '/kort', '/kort/demo-card-mc', '/bedrift', '/innstillinger'];
+const ROUTES = ['/', '/kontoer', '/kontoer/demo-acc-bruk', '/kontoer/import', '/transaksjoner', '/abonnementer', '/kort', '/kort/demo-card-mc', '/formue', '/bedrift', '/innstillinger'];
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');

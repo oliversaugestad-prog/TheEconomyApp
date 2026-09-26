@@ -246,6 +246,8 @@ export interface Quote {
 
 export interface BusinessData {
   name: string;
+  /** Din eierandel i prosent (kun bedrift). Standard 100 %. */
+  ownership?: number;
   items: BusinessItem[];
   holdings: Holding[];
   quotes: Record<string, Quote>;
@@ -263,4 +265,6 @@ export interface AppData {
   settings: Settings;
   /** Manuell bedriftsside (valgfri). */
   business?: BusinessData;
+  /** Private investeringer, eiendeler og lån som ikke kommer fra banktilkobling. */
+  personalAssets?: BusinessData;
 }

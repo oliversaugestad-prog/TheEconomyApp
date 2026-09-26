@@ -6,8 +6,11 @@ import type { BusinessData, CurrencyCode, ExchangeRate, Holding, Minor, Quote } 
  * avrundes til minste valutaenhet. Ulike valutaer omregnes med oppgitt kurs.
  */
 
-export function emptyBusiness(): BusinessData {
-  return { name: 'Bedrift', items: [], holdings: [], quotes: {} };
+/** Bedriften eller privatøkonomien («i ditt navn»). */
+export type AssetScope = 'business' | 'personal';
+
+export function emptyBusiness(name = 'Bedrift'): BusinessData {
+  return { name, items: [], holdings: [], quotes: {} };
 }
 
 /** Noen børser oppgir kurs i hundredeler (f.eks. GBp = pence). */

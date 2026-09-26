@@ -2,7 +2,7 @@ import { Briefcase, Building2, Landmark, Loader2, Pencil, Plus, RefreshCw, Searc
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useBackend } from '../../backend/session';
 import { BankApiError, callBank } from '../../backend/supabase';
-import { emptyBusiness, normalizeQuoteCurrency, summarizeBusiness, type HoldingValuation } from '../../domain/business';
+import { emptyBusiness, normalizeQuoteCurrency, summarizeBusiness, type AssetScope, type HoldingValuation } from '../../domain/business';
 import { formatTimestamp } from '../../domain/dates';
 import { formatMoney, parseAmount } from '../../domain/money';
 import type { BusinessItem, Holding, Quote } from '../../domain/types';
@@ -13,10 +13,10 @@ import { Dialog } from '../components/Dialog';
 import { Empty, Notice, Segmented } from '../components/common';
 import { Page } from '../Layout';
 
-const CURRENCIES = ['NOK', 'USD', 'EUR', 'SEK', 'DKK', 'GBP', 'CHF'];
+export const CURRENCIES = ['NOK', 'USD', 'EUR', 'SEK', 'DKK', 'GBP', 'CHF'];
 const REFRESH_MS = 60_000;
 
-const KIND_LABEL: Record<BusinessItem['kind'], string> = {
+export const KIND_LABEL: Record<BusinessItem['kind'], string> = {
   cash: 'Bank og kontanter',
   asset: 'Andre eiendeler',
   debt: 'Gjeld',
@@ -31,7 +31,7 @@ function formatPrice(price: number, currency: string) {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency, currencyDisplay: currency === 'NOK' ? 'symbol' : 'code', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(price);
 }
 
-function formatPct(p: number) {
+export function formatPct(p: number) {
   return `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p * 100).toLocaleString('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
 }
 
@@ -47,7 +47,7 @@ interface ServerQuote {
 }
 
 /** Henter markedskurser jevnlig mens siden er åpen og synlig. */
-function useLiveQuotes(symbols: string[]) {
+export function useLiveQuotes(symbols: string[], scope: AssetScope = 'business') {
   const store = useStore();
   const backend = useBackend();
   const [loading, setLoading] = useState(false);
@@ -67,7 +67,7 @@ function useLiveQuotes(symbols: string[]) {
           const prev = q.previousClose != null ? normalizeQuoteCurrency(q.currency!, q.previousClose).price : null;
           return { symbol: q.symbol, price: norm.price, previousClose: prev, currency: norm.currency, time: q.time ?? null, fetchedAt: r.fetchedAt, source: r.source };
         });
-      store.setQuotes(ok);
+      store.setQuotes(ok, scope);
       const failed = r.quotes.filter((q) => q.error).map((q) => q.symbol);
       setError(failed.length ? `Fant ikke kurs for ${failed.join(', ')}.` : null);
       setLastFetch(r.fetchedAt);
@@ -76,7 +76,7 @@ function useLiveQuotes(symbols: string[]) {
     } finally {
       setLoading(false);
     }
-  }, [backend.mode, key, store]);
+  }, [backend.mode, key, store, scope]);
 
   useEffect(() => {
     void refresh();
@@ -284,7 +284,7 @@ export function BusinessPage() {
   );
 }
 
-function HoldingRow({ v, onOpen }: { v: HoldingValuation; onOpen: () => void }) {
+export function HoldingRow({ v, onOpen }: { v: HoldingValuation; onOpen: () => void }) {
   const h = v.holding;
   const up = (v.dayChangePct ?? 0) > 0;
   const down = (v.dayChangePct ?? 0) < 0;
@@ -328,7 +328,7 @@ interface SearchResult {
   type: string;
 }
 
-function HoldingDialog({ holding, onClose, onSaved }: { holding: Holding | null; onClose: () => void; onSaved: () => void }) {
+export function HoldingDialog({ holding, onClose, onSaved, scope = 'business' }: { holding: Holding | null; onClose: () => void; onSaved: () => void; scope?: AssetScope }) {
   const store = useStore();
   const backend = useBackend();
   const [mode, setMode] = useState<'listed' | 'unlisted'>(holding && !holding.symbol ? 'unlisted' : backend.mode === 'remote' ? 'listed' : 'unlisted');
@@ -401,7 +401,7 @@ function HoldingDialog({ holding, onClose, onSaved }: { holding: Holding | null;
       costPerShare: costN,
       manualPrice: mode === 'unlisted' ? manualN : null,
       updatedAt: new Date().toISOString(),
-    });
+    }, scope);
     onSaved();
   };
 
@@ -448,7 +448,7 @@ function HoldingDialog({ holding, onClose, onSaved }: { holding: Holding | null;
                 <span>Søk etter navn eller ticker</span>
                 <span className="search">
                   <Search size={18} aria-hidden="true" />
-                  <input id="holding-search" className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="F.eks. Equinor, DNB eller AAPL" autoComplete="off" />
+                  <input id="holding-search" className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="F.eks. Equinor, AAPL eller Bitcoin" autoComplete="off" />
                 </span>
               </label>
               {searching && (
@@ -516,7 +516,7 @@ function HoldingDialog({ holding, onClose, onSaved }: { holding: Holding | null;
         )}
         <div className="row wrap" style={{ justifyContent: 'space-between' }}>
           {holding ? (
-            <button type="button" className="btn danger small" onClick={() => { store.deleteHolding(holding.id); onClose(); }}>
+            <button type="button" className="btn danger small" onClick={() => { store.deleteHolding(holding.id, scope); onClose(); }}>
               Slett
             </button>
           ) : (
@@ -536,10 +536,10 @@ function HoldingDialog({ holding, onClose, onSaved }: { holding: Holding | null;
   );
 }
 
-function ItemDialog({ item, kind, onClose }: { item: BusinessItem | null; kind: BusinessItem['kind']; onClose: () => void }) {
+export function ItemDialog({ item, kind, onClose, scope = 'business' }: { item: BusinessItem | null; kind: BusinessItem['kind']; onClose: () => void; scope?: AssetScope }) {
   const store = useStore();
   const [name, setName] = useState(item?.name ?? '');
-  const [institution, setInstitution] = useState(item?.institution ?? (kind === 'cash' ? 'SpareBank 1 SMN' : ''));
+  const [institution, setInstitution] = useState(item?.institution ?? (kind === 'cash' && scope === 'business' ? 'SpareBank 1 SMN' : ''));
   const [currency, setCurrency] = useState(item?.currency ?? 'NOK');
   const [amount, setAmount] = useState(item ? formatMoney(item.amount, item.currency).replace(/[^\d,\-−]/g, '').replace('−', '-') : '');
   const [error, setError] = useState<string | null>(null);
@@ -557,7 +557,7 @@ function ItemDialog({ item, kind, onClose }: { item: BusinessItem | null; kind: 
       currency,
       amount: kind === 'debt' ? Math.abs(minor) : minor,
       updatedAt: new Date().toISOString(),
-    });
+    }, scope);
     onClose();
   };
 
@@ -567,7 +567,7 @@ function ItemDialog({ item, kind, onClose }: { item: BusinessItem | null; kind: 
         <div className="form-grid two">
           <label className="field">
             <span>Navn</span>
-            <input id="item-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'cash' ? 'F.eks. Driftskonto' : kind === 'asset' ? 'F.eks. Firmabil' : 'F.eks. Banklån'} />
+            <input id="item-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={scope === 'personal' ? (kind === 'cash' ? 'F.eks. Kontanter i Nordnet' : kind === 'asset' ? 'F.eks. Leilighet eller bil' : 'F.eks. Boliglån eller studielån') : kind === 'cash' ? 'F.eks. Driftskonto' : kind === 'asset' ? 'F.eks. Firmabil' : 'F.eks. Banklån'} />
           </label>
           <label className="field">
             <span>{kind === 'debt' ? 'Långiver' : kind === 'cash' ? 'Bank' : 'Beskrivelse'} (valgfritt)</span>
@@ -593,7 +593,7 @@ function ItemDialog({ item, kind, onClose }: { item: BusinessItem | null; kind: 
         )}
         <div className="row wrap" style={{ justifyContent: 'space-between' }}>
           {item ? (
-            <button type="button" className="btn danger small" onClick={() => { store.deleteBusinessItem(item.id); onClose(); }}>
+            <button type="button" className="btn danger small" onClick={() => { store.deleteBusinessItem(item.id, scope); onClose(); }}>
               Slett
             </button>
           ) : (

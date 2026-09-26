@@ -125,3 +125,52 @@ describe('kommende betalinger og estimert igjen', () => {
     expect(est.notes.join(' ')).toMatch(/Faktura er ikke tilgjengelig/);
   });
 });
+
+describe('abonnementer med ujevnt mønster fra ekte banker', () => {
+  it('samler Spotify med ulike referansekoder og to trekk samme dag', () => {
+    const s = detectSubscriptions(
+      [
+        tx({ accountId: 'r', amount: -7500, counterparty: 'SpotifySE', bookingDate: '2026-07-21', category: 'abonnementer' }),
+        tx({ accountId: 'r', amount: -7500, counterparty: 'Spotify P4608E110B', bookingDate: '2026-08-25', category: 'abonnementer' }),
+        tx({ accountId: 'r', amount: -7500, counterparty: 'Spotify P471779FF7', bookingDate: '2026-09-21', category: 'abonnementer' }),
+        tx({ accountId: 'r', amount: -7500, counterparty: 'Spotify P471779FF7', bookingDate: '2026-09-21', category: 'abonnementer' }),
+      ],
+      [],
+      [],
+    );
+    expect(s).toHaveLength(1);
+    expect(s[0]).toMatchObject({ matchKey: 'spotify', name: 'Spotify', interval: 'monthly', amount: 7500, occurrences: 4 });
+    expect(s[0].confidence).toBeLessThan(0.5);
+  });
+
+  it('foreslår mobilabonnement med flere trekk per måned som månedens sum', () => {
+    const s = detectSubscriptions(
+      [
+        tx({ accountId: 'l', amount: -11500, counterparty: 'Eesy.dk', bookingDate: '2026-08-01', category: 'abonnementer' }),
+        tx({ accountId: 'l', amount: -500, counterparty: 'Eesy.dk', bookingDate: '2026-08-02', category: 'abonnementer' }),
+        tx({ accountId: 'l', amount: -13500, counterparty: 'Eesy.dk', bookingDate: '2026-09-02', category: 'abonnementer' }),
+        tx({ accountId: 'l', amount: -500, counterparty: 'Eesy.dk', bookingDate: '2026-09-03', category: 'abonnementer' }),
+      ],
+      [],
+      [],
+    );
+    expect(s[0]).toMatchObject({ matchKey: 'eesy', amount: 13000, anchorDate: '2026-09-02' });
+  });
+
+  it('foreslår ikke gamle engangskjøp eller kjøp i andre kategorier', () => {
+    const s = detectSubscriptions(
+      [
+        tx({ accountId: 'a', amount: -9900, counterparty: 'Audible Uk', bookingDate: '2026-06-01', category: 'abonnementer' }),
+        tx({ accountId: 'a', amount: -40000, counterparty: 'Zalando', bookingDate: '2026-09-20', category: 'shopping' }),
+      ],
+      [],
+      [],
+    );
+    expect(s).toHaveLength(0);
+  });
+
+  it('hopper over tjenester som allerede er bekreftet', () => {
+    const s = detectSubscriptions([tx({ accountId: 'r', amount: -7500, counterparty: 'Spotify P471779FF7', bookingDate: '2026-09-21', category: 'abonnementer' })], [], ['spotify']);
+    expect(s).toHaveLength(0);
+  });
+});

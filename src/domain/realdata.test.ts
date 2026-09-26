@@ -16,6 +16,8 @@ describe('ekte banktekster', () => {
 
   it('kategoriserer vanlige norske og danske mottakere', () => {
     expect(guessCategory('Udbetaling   LIDL1234NORDREFASAN', '', -100)).toBe('dagligvarer');
+    expect(guessCategory('Apple Pay Top-Up by *7761', '', 200000)).not.toBe('abonnementer');
+    expect(guessCategory('APPLE.COM/BILL', '', -2500)).toBe('abonnementer');
     expect(guessCategory('Vipps*Storytel', '', -100)).toBe('abonnementer');
     expect(guessCategory('Rejsekort Som App', '', -100)).toBe('transport');
     expect(guessCategory('Udbetaling   PIZZA OTTO - ELMEG', '', -100)).toBe('restaurant');

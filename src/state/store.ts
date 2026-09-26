@@ -1,7 +1,7 @@
 import { cleanCounterparty, normalizeCounterparty } from '../domain/categories';
 import { todayIn } from '../domain/dates';
 import { classifyTransactions, mergeTransactions, type MergeStats } from '../domain/reconcile';
-import { emptyBusiness } from '../domain/business';
+import { emptyBusiness, type AssetScope } from '../domain/business';
 import { detectSubscriptions, suggestionToSubscription, type SubscriptionSuggestion } from '../domain/subscriptions';
 import type { CsvRowResult } from '../domain/csv';
 import type {
@@ -434,38 +434,57 @@ export class SaldoStore {
 
   /* ------------------------------- bedrift ------------------------------- */
 
-  private updateBusiness(fn: (b: BusinessData) => BusinessData) {
-    this.update((d) => ({ ...d, business: fn(d.business ?? emptyBusiness()) }));
+  /**
+   * Eiendeler og gjeld registreres i to adskilte samlinger: bedriften og
+   * privatøkonomien («i ditt navn»). Begge bruker samme struktur.
+   */
+  private updateBusiness(fn: (b: BusinessData) => BusinessData, scope: AssetScope = 'business') {
+    this.update((d) =>
+      scope === 'business'
+        ? { ...d, business: fn(d.business ?? emptyBusiness()) }
+        : { ...d, personalAssets: fn(d.personalAssets ?? emptyBusiness('Privat')) },
+    );
   }
 
   setBusinessName(name: string) {
     this.updateBusiness((b) => ({ ...b, name: name.trim() || 'Bedrift' }));
   }
 
-  upsertBusinessItem(item: BusinessItem) {
-    this.updateBusiness((b) => ({
-      ...b,
-      items: b.items.some((x) => x.id === item.id) ? b.items.map((x) => (x.id === item.id ? item : x)) : [...b.items, item],
-    }));
+  /** Din eierandel i bedriften (0–100 %), brukt i formuesoversikten. */
+  setBusinessOwnership(percent: number | null) {
+    this.updateBusiness((b) => ({ ...b, ownership: percent === null ? undefined : Math.min(100, Math.max(0, percent)) }));
   }
 
-  deleteBusinessItem(id: string) {
-    this.updateBusiness((b) => ({ ...b, items: b.items.filter((x) => x.id !== id) }));
+  upsertBusinessItem(item: BusinessItem, scope: AssetScope = 'business') {
+    this.updateBusiness(
+      (b) => ({
+        ...b,
+        items: b.items.some((x) => x.id === item.id) ? b.items.map((x) => (x.id === item.id ? item : x)) : [...b.items, item],
+      }),
+      scope,
+    );
   }
 
-  upsertHolding(h: Holding) {
-    this.updateBusiness((b) => ({
-      ...b,
-      holdings: b.holdings.some((x) => x.id === h.id) ? b.holdings.map((x) => (x.id === h.id ? h : x)) : [...b.holdings, h],
-    }));
+  deleteBusinessItem(id: string, scope: AssetScope = 'business') {
+    this.updateBusiness((b) => ({ ...b, items: b.items.filter((x) => x.id !== id) }), scope);
   }
 
-  deleteHolding(id: string) {
-    this.updateBusiness((b) => ({ ...b, holdings: b.holdings.filter((x) => x.id !== id) }));
+  upsertHolding(h: Holding, scope: AssetScope = 'business') {
+    this.updateBusiness(
+      (b) => ({
+        ...b,
+        holdings: b.holdings.some((x) => x.id === h.id) ? b.holdings.map((x) => (x.id === h.id ? h : x)) : [...b.holdings, h],
+      }),
+      scope,
+    );
+  }
+
+  deleteHolding(id: string, scope: AssetScope = 'business') {
+    this.updateBusiness((b) => ({ ...b, holdings: b.holdings.filter((x) => x.id !== id) }), scope);
   }
 
   /** Lagrer ferske markedskurser. Kurser for aksjer som ikke lenger finnes, fjernes. */
-  setQuotes(quotes: Quote[]) {
+  setQuotes(quotes: Quote[], scope: AssetScope = 'business') {
     if (!quotes.length) return;
     this.updateBusiness((b) => {
       const next: Record<string, Quote> = { ...b.quotes };
@@ -473,7 +492,7 @@ export class SaldoStore {
       const used = new Set(b.holdings.map((h) => h.symbol).filter(Boolean) as string[]);
       for (const k of Object.keys(next)) if (!used.has(k)) delete next[k];
       return { ...b, quotes: next };
-    });
+    }, scope);
   }
 
   /** Kjører kategorisering og gjenkjenning av overføringer på nytt (f.eks. etter en appoppdatering). */
