@@ -1,6 +1,6 @@
 import { account, tx } from '../test/factories';
 import { balanceSummary } from './calculations';
-import { guessCategory, normalizeCounterparty } from './categories';
+import { findRule, guessCategory, normalizeCounterparty, suggestRuleKey } from './categories';
 import { classifyTransactions } from './reconcile';
 import { defaultSettings } from '../storage/repository';
 import { mapTransactions } from '../providers/ebMapping';
@@ -17,6 +17,14 @@ describe('ekte banktekster', () => {
   it('kategoriserer vanlige norske og danske mottakere', () => {
     expect(guessCategory('Udbetaling   LIDL1234NORDREFASAN', '', -100)).toBe('dagligvarer');
     expect(guessCategory('Apple Pay Top-Up by *7761', '', 200000)).not.toBe('abonnementer');
+    expect(guessCategory('FLYSAS STOCKHOLM', '', -100)).toBe('transport');
+    expect(guessCategory('RYANAIR LTD AIRLINE DUBLIN', '', -100)).toBe('transport');
+    expect(guessCategory('Zara KBH K - 3115 Koebenhavn K', '', -100)).toBe('shopping');
+    expect(guessCategory('END. CLOTHING NEWCASTLE UPON', '', -100)).toBe('shopping');
+    expect(guessCategory('Lnr: 001-093-0519-08', '', -100)).toBe('lan');
+    expect(guessCategory('LOVABLE DOVER', '', -100)).toBe('abonnementer');
+    expect(guessCategory('FLY.IO SAN FRANCISCO', '', -100)).toBe('abonnementer');
+    expect(guessCategory('Sub Bod As - A', '', -100)).toBe('restaurant');
     expect(guessCategory('APPLE.COM/BILL', '', -2500)).toBe('abonnementer');
     expect(guessCategory('Vipps*Storytel', '', -100)).toBe('abonnementer');
     expect(guessCategory('Rejsekort Som App', '', -100)).toBe('transport');
@@ -80,5 +88,16 @@ describe('ekte banktekster', () => {
       '2026-09-26',
     );
     expect(t.map((x) => x.bookingDate)).toEqual(['2026-09-26', '2026-09-28']);
+  });
+});
+
+describe('regler for lignende kjøp', () => {
+  it('foreslår kjedenavnet og treffer andre butikker i samme kjede', () => {
+    expect(suggestRuleKey('Zara KBH K - 3115 Koebenhavn K')).toBe('zara');
+    expect(suggestRuleKey('Den norske legeforening')).toBe('den norske');
+    expect(suggestRuleKey('END. CLOTHING NEWCASTLE UPON')).toBe('end clothing');
+    const rules = [{ id: 'r', matchKey: 'zara', category: 'shopping' as const, createdAt: '' }];
+    expect(findRule(rules, 'Zara Fisketorvet - 9134 Koebenhavn V')?.category).toBe('shopping');
+    expect(findRule(rules, 'Zaragoza Tapas')).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import { cleanCounterparty, normalizeCounterparty } from '../domain/categories';
+import { cleanCounterparty, normalizeCounterparty, suggestRuleKey } from '../domain/categories';
 import { todayIn } from '../domain/dates';
 import { classifyTransactions, mergeTransactions, type MergeStats } from '../domain/reconcile';
 import { emptyBusiness, type AssetScope } from '../domain/business';
@@ -152,13 +152,17 @@ export class SaldoStore {
 
   /* --------------------------- transaksjoner --------------------------- */
 
-  setCategory(txId: string, category: CategoryId, remember: boolean) {
+  /**
+   * Endrer kategori. Med `remember` lagres en regel som også gjelder tidligere og fremtidige
+   * lignende kjøp – mottakere som starter med `matchKey` (standard: foreslått nøkkel, f.eks. «zara»).
+   */
+  setCategory(txId: string, category: CategoryId, remember: boolean, matchKey?: string) {
     this.update((d) => {
       const tx = d.transactions.find((t) => t.id === txId);
       if (!tx) return d;
       let rules = d.rules;
       if (remember) {
-        const key = normalizeCounterparty(tx.counterparty);
+        const key = normalizeCounterparty(matchKey ?? '') || suggestRuleKey(tx.counterparty);
         rules = [...rules.filter((r) => r.matchKey !== key), { id: newId('rule'), matchKey: key, category, createdAt: this.clock().toISOString() }];
       }
       const transactions = d.transactions.map((t) => (t.id === txId ? { ...t, category, userCategorized: true } : t));

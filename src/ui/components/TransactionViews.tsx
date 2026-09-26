@@ -1,7 +1,7 @@
 import { ArrowLeftRight, CreditCard, RotateCcw, Undo2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CATEGORIES, CATEGORY_BY_ID, normalizeCounterparty } from '../../domain/categories';
+import { CATEGORIES, CATEGORY_BY_ID, normalizeCounterparty, ruleMatches, suggestRuleKey, findRule } from '../../domain/categories';
 import { formatDate, relativeDay } from '../../domain/dates';
 import type { Account, CategoryId, Transaction, TransactionKind } from '../../domain/types';
 import { useData, useStore, useToday } from '../../state/StoreContext';
@@ -72,21 +72,22 @@ export function TransactionDetail({ tx, onClose }: { tx: Transaction | null; onC
   const store = useStore();
   const data = useData();
   // Hent alltid siste versjon fra lageret.
-  const t = tx ? data.transactions.find((x) => x.id === tx.id) ?? null : null;
-  const [remember, setRemember] = useState(false);
+  const t = tx ? (data.transactions.find((x) => x.id === tx.id) ?? null) : null;
+  const [remember, setRemember] = useState(true);
+  const [ruleKey, setRuleKey] = useState(() => (tx ? (findRule(data.rules, tx.counterparty)?.matchKey ?? suggestRuleKey(tx.counterparty)) : ''));
   const [saved, setSaved] = useState<string | null>(null);
   if (!t) return null;
   const account = data.accounts.find((a) => a.id === t.accountId);
   const linked = t.linkedTransactionId ? data.transactions.find((x) => x.id === t.linkedTransactionId) : null;
   const linkedAcc = linked ? data.accounts.find((a) => a.id === linked.accountId) : null;
-  const key = normalizeCounterparty(t.counterparty);
-  const rule = data.rules.find((r) => r.matchKey === key);
+  const rule = findRule(data.rules, t.counterparty);
+  const effectiveKey = normalizeCounterparty(ruleKey) || suggestRuleKey(t.counterparty);
   const categories = CATEGORIES.filter((c) => (t.amount >= 0 && t.kind !== 'refund' ? true : c.type === 'expense'));
-  const sameCounterparty = data.transactions.filter((x) => normalizeCounterparty(x.counterparty) === key).length;
+  const similar = data.transactions.filter((x) => ruleMatches(effectiveKey, x.counterparty)).length;
 
   const changeCategory = (c: CategoryId) => {
-    store.setCategory(t.id, c, remember);
-    setSaved(remember ? `Lagret. Regel for «${t.counterparty}» brukes på ${sameCounterparty} transaksjoner og fremtidige.` : 'Kategori lagret.');
+    store.setCategory(t.id, c, remember, effectiveKey);
+    setSaved(remember ? `Lagret. Gjelder ${similar} transaksjon(er) fra «${effectiveKey}» og fremtidige lignende kjøp.` : 'Kategori lagret for denne transaksjonen.');
   };
 
   return (
@@ -133,13 +134,22 @@ export function TransactionDetail({ tx, onClose }: { tx: Transaction | null; onC
 
         <Notice>{effectText(t)}</Notice>
         {t.status === 'pending' && (
-          <p className="small muted">
-            Reserverte beløp er med i månedens utgifter én gang. Når banken bokfører transaksjonen, erstattes reservasjonen – den telles ikke på nytt.
-          </p>
+          <p className="small muted">Reserverte beløp er med i månedens utgifter én gang. Når banken bokfører transaksjonen, erstattes reservasjonen – den telles ikke på nytt.</p>
         )}
 
         {t.kind !== 'internal_transfer' && t.kind !== 'card_payment' && (
           <div className="stack-sm">
+            <label className="check">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              <span className="small">Husk for lignende kjøp – bruk samme kategori på tidligere og fremtidige transaksjoner</span>
+            </label>
+            {remember && (
+              <label className="field">
+                <span>Mottakere som starter med</span>
+                <input className="input" value={ruleKey} onChange={(e) => setRuleKey(e.target.value)} autoComplete="off" />
+                <span className="hint">Treffer {similar} transaksjon(er). Gjør teksten kortere for å treffe flere butikker i samme kjede (f.eks. «zara»).</span>
+              </label>
+            )}
             <label className="field">
               <span>Kategori</span>
               <select className="select" value={t.category} onChange={(e) => changeCategory(e.target.value as CategoryId)}>
@@ -150,13 +160,11 @@ export function TransactionDetail({ tx, onClose }: { tx: Transaction | null; onC
                 ))}
               </select>
             </label>
-            <label className="check">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              <span className="small">
-                Husk for «{t.counterparty}» – bruk samme kategori på tidligere og fremtidige transaksjoner fra denne mottakeren
-              </span>
-            </label>
-            {rule && !saved && <p className="hint">Regel finnes: «{t.counterparty}» → {CATEGORY_BY_ID[rule.category].label}</p>}
+            {rule && !saved && (
+              <p className="hint">
+                Regel finnes: «{rule.matchKey}» → {CATEGORY_BY_ID[rule.category].label}
+              </p>
+            )}
             {saved && (
               <p className="hint" role="status">
                 {saved}

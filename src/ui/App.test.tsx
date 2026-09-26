@@ -69,9 +69,11 @@ describe('Transaksjoner', () => {
     const list = screen.getByRole('region', { name: 'Transaksjonsliste' });
     await user.click(within(list).getAllByRole('button')[0]);
     const dialog = screen.getByRole('dialog', { name: 'Transaksjon' });
-    await user.click(within(dialog).getByRole('checkbox', { name: /Husk for/ }));
+    // «Husk for lignende kjøp» er på som standard
+    expect(within(dialog).getByRole('checkbox', { name: /Husk for lignende kjøp/ })).toBeChecked();
+    expect(within(dialog).getByLabelText(/Mottakere som starter med/)).toHaveValue('sats');
     await user.selectOptions(within(dialog).getByLabelText('Kategori'), 'helse');
-    expect(within(dialog).getByRole('status')).toHaveTextContent(/Regel/);
+    expect(within(dialog).getByRole('status')).toHaveTextContent(/fremtidige lignende kjøp/);
     const sats = store.data.transactions.filter((t) => t.counterparty === 'SATS NORGE AS');
     expect(sats.every((t) => t.category === 'helse')).toBe(true);
   });
@@ -282,5 +284,17 @@ describe('Import fra Amex', () => {
     expect(txs.map((t) => t.amount).sort((a, b) => a - b)).toEqual([-25000, -10900, 50000]);
     // Innbetalingen til kortet er nedbetaling av gjeld, ikke inntekt
     expect(txs.find((t) => t.amount === 50000)?.kind).toBe('card_payment');
+  });
+});
+
+describe('Kategorier i oversikten', () => {
+  it('åpner transaksjonene i kategorien når man trykker på den', async () => {
+    const { user } = setup('/');
+    const card = screen.getByRole('heading', { name: /Utgifter per kategori/ }).closest('section')!;
+    const first = within(card).getAllByRole('button')[0];
+    const label = first.textContent!.match(/^[A-Za-zÆØÅæøå ]+/)![0].trim();
+    await user.click(first);
+    expect(screen.getByRole('region', { name: 'Transaksjonsliste' })).toBeInTheDocument();
+    expect(screen.getAllByText(label).length).toBeGreaterThan(0);
   });
 });

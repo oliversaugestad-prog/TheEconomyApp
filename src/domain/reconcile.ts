@@ -1,4 +1,4 @@
-import { guessCategory, normalizeCounterparty } from './categories';
+import { findRule, guessCategory, normalizeCounterparty } from './categories';
 import { daysBetween } from './dates';
 import type { Account, CategoryRule, Transaction } from './types';
 
@@ -185,13 +185,11 @@ export function classifyTransactions(
 ): Transaction[] {
   const accounts = new Map(accountsList.map((a) => [a.id, a]));
   const isOwn = ownNameMatcher(ownNames);
-  const ruleByKey = new Map(rules.map((r) => [r.matchKey, r.category]));
 
   const txs = transactions.map((t) => {
     let next = t;
     if (!t.userCategorized) {
-      const key = normalizeCounterparty(t.counterparty);
-      const cat = ruleByKey.get(key) ?? guessCategory(t.counterparty, t.description, t.amount, t.mcc);
+      const cat = findRule(rules, t.counterparty)?.category ?? guessCategory(t.counterparty, t.description, t.amount, t.mcc);
       if (cat !== t.category) next = { ...next, category: cat };
     }
     if (!t.userKind && t.kind !== 'normal') {
@@ -251,8 +249,15 @@ export function classifyTransactions(
     if (t.amount >= 0 || t.userKind || t.kind !== 'normal' || linked.has(i)) continue;
     if (accounts.get(t.accountId)?.type === 'credit_card') continue;
     const text = `${t.counterparty} ${t.description}`.toLowerCase();
-    if (!/(kredittkort|kortfaktura|faktura kort|innbetaling kort)/.test(text)) continue;
-    const card = cards.find((c) => text.includes(c.name.toLowerCase()) || text.includes(c.bankName.toLowerCase()));
+    const hinted = /(kredittkort|kortfaktura|faktura kort|innbetaling kort)/.test(text);
+    const card = cards.find((c) => {
+      const issuer = (c.card?.issuer ?? c.bankName).toLowerCase();
+      // Betaling til selve kortutstederen (f.eks. «American Express» eller «Kredittbanken»
+      // for SpareBank 1-kort) er innbetaling på kortet, ikke forbruk.
+      if (issuer.length >= 5 && text.includes(issuer) && !/sparebank|bank$/.test(issuer)) return true;
+      if (/kredittbanken/.test(text) && /sparebank 1/.test(issuer)) return true;
+      return hinted && (text.includes(c.name.toLowerCase()) || text.includes(c.bankName.toLowerCase()));
+    });
     if (card) txs[i] = { ...t, kind: 'card_payment', linkedTransactionId: null };
   }
 
@@ -277,6 +282,8 @@ export function classifyTransactions(
       EXCHANGE.test(t.counterparty.trim()) ||
       EXCHANGE.test(t.description.trim()) ||
       isOwn(t.counterparty) ||
+      // Påfylling av egen Revolut-konto fra en annen bank («Revolut**2327*»).
+      (/^revolut\s*\*/i.test(t.counterparty.trim()) && accountsList.some((a) => /revolut/i.test(a.bankName))) ||
       (/^til:?\s*[\d\s.]+$/i.test(t.counterparty.trim()) && isOwn(t.description))
     ) {
       txs[i] = { ...t, kind: 'internal_transfer', linkedTransactionId: null };

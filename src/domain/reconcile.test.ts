@@ -50,6 +50,19 @@ describe('mergeTransactions', () => {
 });
 
 describe('classifyTransactions', () => {
+  it('regner betaling til Amex fra banken som kortinnbetaling når Amex-kortet finnes i Saldo', () => {
+    const bank = account({ id: 'sb1', bankName: 'SpareBank 1 SMN' });
+    const amex = account({ id: 'amex', type: 'credit_card', bankName: 'American Express', name: 'Amex EB SAS', card: { issuer: 'American Express', last4: '', creditLimit: null, statement: null } });
+    const pay = tx({ accountId: 'sb1', amount: -1051942, counterparty: 'American Express', bookingDate: '2026-09-10' });
+    const topUp = tx({ accountId: 'sb1', amount: -297713, counterparty: 'Revolut**2327*', bookingDate: '2026-09-12' });
+    const revolut = account({ id: 'rev', bankName: 'Revolut' });
+    const res = classifyTransactions([pay, topUp], [bank, amex, revolut], []);
+    expect(res.find((t) => t.id === pay.id)?.kind).toBe('card_payment');
+    expect(res.find((t) => t.id === topUp.id)?.kind).toBe('internal_transfer');
+    // Uten Amex-kortet i Saldo er det fortsatt forbruk (der kortkjøpene ellers ville mangle)
+    expect(classifyTransactions([pay], [bank], [])[0].kind).toBe('normal');
+  });
+
   it('markerer overføring mellom egne kontoer, som ikke teller som inntekt eller forbruk', () => {
     const out = tx({ accountId: 'bruk', amount: -500000, counterparty: 'Sparekonto', description: 'Overføring til egen konto', bookingDate: '2026-09-25' });
     const inn = tx({ accountId: 'spar', amount: 500000, counterparty: 'Brukskonto', description: 'Overføring fra egen konto', bookingDate: '2026-09-26' });

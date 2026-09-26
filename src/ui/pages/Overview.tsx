@@ -1,6 +1,6 @@
 import { Bell, CalendarClock, Info, PiggyBank, Receipt } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   balanceSummary,
   bookedOrAvailable,
@@ -32,6 +32,7 @@ import { Page } from '../Layout';
 type DetailKey = 'booked' | 'available' | 'debt' | 'net' | 'remaining' | null;
 
 export function OverviewPage() {
+  const navigate = useNavigate();
   const data = useData();
   const { syncing } = useSnapshot();
   const store = useStore();
@@ -275,13 +276,13 @@ export function OverviewPage() {
 
         <section className="card" aria-labelledby="cat-h">
           <div className="card-head">
-            <h2 id="cat-h">Utgifter per kategori</h2>
+            <h2 id="cat-h">Utgifter per kategori · {formatMonth(month)}</h2>
             <Link className="link" to="/transaksjoner?vis=analyse">
               Analyse
             </Link>
           </div>
           {breakdown.length ? (
-            <CategoryBars shares={breakdown} currency={base} limit={6} />
+            <CategoryBars shares={breakdown} currency={base} limit={6} onSelect={(c) => navigate(`/transaksjoner?kategori=${c}&fra=${month}-01`)} />
           ) : (
             <Empty icon={<Receipt size={22} />} title="Ingen utgifter denne måneden" />
           )}
