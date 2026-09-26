@@ -6,6 +6,7 @@ import { Empty } from './components/common';
 import { AppShell, Page } from './Layout';
 import { BankBridge } from './BankBridge';
 import { AccountDetailPage } from './pages/AccountDetail';
+import { BusinessPage } from './pages/Business';
 import { AccountsPage } from './pages/Accounts';
 import { CardDetailPage, CardsPage } from './pages/Cards';
 import { ImportPage } from './pages/Import';
@@ -35,6 +36,7 @@ export function AppRoutes() {
         <Route path="/abonnementer" element={<SubscriptionsPage />} />
         <Route path="/kort" element={<CardsPage />} />
         <Route path="/kort/:id" element={<CardDetailPage />} />
+        <Route path="/bedrift" element={<BusinessPage />} />
         <Route path="/innstillinger" element={<SettingsPage />} />
         <Route
           path="*"

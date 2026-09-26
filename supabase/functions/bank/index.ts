@@ -1,6 +1,6 @@
 // Saldo – serverfunksjon for Enable Banking (PSD2 kontoinformasjon).
 //
-// - POST (med Supabase-innlogging): status, rates, set-key, aspsps, start-auth, sync, disconnect
+// - POST (med Supabase-innlogging): status, rates, quote-search, quotes, set-key, aspsps, start-auth, sync, disconnect
 // - GET  (fra banken etter BankID): tar imot ?code&state, oppretter samtykke og sender
 //   brukeren tilbake til Saldo.
 //
@@ -240,6 +240,58 @@ async function handleAction(req: Request): Promise<Response> {
   }
 
   if (!allowed) throw new HttpError(403, 'Denne brukeren har ikke tilgang til banktilkobling.', 'forbidden');
+
+  if (action === 'quote-search') {
+    const q = String(body.q ?? '').trim().slice(0, 60);
+    if (q.length < 2) return json(req, { results: [] });
+    const res = await fetch(
+      `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=12&newsCount=0&listsCount=0`,
+      { headers: { 'User-Agent': 'Mozilla/5.0 (Saldo)' } },
+    );
+    if (!res.ok) throw new HttpError(502, 'Kunne ikke søke etter verdipapirer akkurat nå.');
+    const data = await res.json();
+    const results = (data.quotes ?? [])
+      .filter((x: Record<string, unknown>) => x.symbol && ['EQUITY', 'ETF', 'MUTUALFUND', 'INDEX', 'CRYPTOCURRENCY'].includes(String(x.quoteType)))
+      .map((x: Record<string, unknown>) => ({
+        symbol: x.symbol,
+        name: x.longname ?? x.shortname ?? x.symbol,
+        exchange: x.exchDisp ?? x.exchange ?? '',
+        type: x.typeDisp ?? x.quoteType,
+      }));
+    return json(req, { results });
+  }
+
+  if (action === 'quotes') {
+    const symbols = (Array.isArray(body.symbols) ? body.symbols : [])
+      .map((s: unknown) => String(s).trim().toUpperCase())
+      .filter((s: string) => /^[A-Z0-9.^=\-]{1,20}$/.test(s))
+      .slice(0, 40);
+    const quotes = await Promise.all(
+      symbols.map(async (symbol: string) => {
+        try {
+          const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Saldo)' },
+          });
+          if (!res.ok) return { symbol, error: `Fant ikke kurs (${res.status})` };
+          const meta = (await res.json())?.chart?.result?.[0]?.meta;
+          if (!meta || typeof meta.regularMarketPrice !== 'number') return { symbol, error: 'Fant ikke kurs' };
+          return {
+            symbol,
+            name: meta.longName ?? meta.shortName ?? symbol,
+            exchange: meta.fullExchangeName ?? meta.exchangeName ?? '',
+            currency: meta.currency ?? null,
+            price: meta.regularMarketPrice,
+            previousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
+            time: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
+            error: null,
+          };
+        } catch {
+          return { symbol, error: 'Kunne ikke hente kurs' };
+        }
+      }),
+    );
+    return json(req, { quotes, fetchedAt: new Date().toISOString(), source: 'Yahoo Finance' });
+  }
 
   if (action === 'set-key') {
     const pem = String(body.pem ?? '');

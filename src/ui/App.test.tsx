@@ -152,3 +152,36 @@ describe('Innstillinger', () => {
     expect(screen.getByText('Egne data', { selector: '.badge' })).toBeInTheDocument();
   });
 });
+
+describe('Bedrift', () => {
+  it('registrerer bankinnskudd, unotert aksjepost og gjeld, og viser samlet verdi', async () => {
+    const { user, store } = setup('/bedrift');
+    await user.click(screen.getByRole('button', { name: 'Legg til bank og kontanter' }));
+    let dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Navn'), 'Driftskonto');
+    await user.type(within(dialog).getByLabelText('Saldo'), '100 000');
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+
+    await user.click(screen.getByRole('button', { name: /Legg til$/ }));
+    dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Unotert' }));
+    await user.type(within(dialog).getByLabelText('Navn'), 'Eksempel Holding AS');
+    await user.type(within(dialog).getByLabelText(/Kurs per aksje/), '125,50');
+    await user.type(within(dialog).getByLabelText('Antall'), '100');
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+
+    await user.click(screen.getByRole('button', { name: 'Legg til gjeld' }));
+    dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Navn'), 'Banklån');
+    await user.type(within(dialog).getByLabelText('Utestående'), '20 000');
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+
+    expect(store.data.business?.items).toHaveLength(2);
+    expect(store.data.business?.holdings[0]).toMatchObject({ symbol: null, quantity: 100, manualPrice: 125.5 });
+    const hero = screen.getByText(/Samlet verdi/).closest('section')!;
+    // 100 000 + 12 550 − 20 000 = 92 550
+    expect(text(hero)).toMatch(/92 550,00 kr/);
+    // Holdes utenfor privat totalsum
+    expect(store.data.accounts.some((a) => a.name === 'Driftskonto')).toBe(false);
+  });
+});

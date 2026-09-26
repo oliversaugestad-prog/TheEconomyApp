@@ -200,6 +200,57 @@ export interface Settings {
   ownNames?: string[];
 }
 
+/* ------------------------------ Bedrift ------------------------------ */
+
+/** Manuelt registrert post: bankinnskudd/kontanter, annen eiendel eller gjeld. */
+export interface BusinessItem {
+  id: string;
+  kind: 'cash' | 'asset' | 'debt';
+  name: string;
+  /** F.eks. bank eller långiver. */
+  institution: string;
+  currency: CurrencyCode;
+  /** Beløp i minste enhet. For gjeld: utestående som positivt tall. */
+  amount: Minor;
+  updatedAt: IsoTimestamp;
+}
+
+/** Aksjepost. Børsnoterte følger markedskurs; unoterte har manuell kurs. */
+export interface Holding {
+  id: string;
+  /** Ticker hos kursleverandøren (f.eks. «EQNR.OL»). `null` for unoterte. */
+  symbol: string | null;
+  name: string;
+  exchange: string;
+  /** Valuta kursen oppgis i. */
+  currency: CurrencyCode;
+  /** Antall aksjer/andeler (kan være desimaltall for fond). */
+  quantity: number;
+  /** Gjennomsnittlig kjøpskurs per aksje i `currency`, hvis kjent. */
+  costPerShare: number | null;
+  /** Manuell kurs per aksje (brukes for unoterte, eller når markedskurs mangler). */
+  manualPrice: number | null;
+  updatedAt: IsoTimestamp;
+}
+
+export interface Quote {
+  symbol: string;
+  price: number;
+  previousClose: number | null;
+  currency: CurrencyCode;
+  /** Tidspunkt for siste handel/kurs. */
+  time: IsoTimestamp | null;
+  fetchedAt: IsoTimestamp;
+  source: string;
+}
+
+export interface BusinessData {
+  name: string;
+  items: BusinessItem[];
+  holdings: Holding[];
+  quotes: Record<string, Quote>;
+}
+
 export interface AppData {
   version: 1;
   connections: Connection[];
@@ -210,4 +261,6 @@ export interface AppData {
   rules: CategoryRule[];
   rates: ExchangeRate[];
   settings: Settings;
+  /** Manuell bedriftsside (valgfri). */
+  business?: BusinessData;
 }

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CheckCircle2, CircleAlert, CreditCard, Eye, EyeOff, LayoutGrid, Landmark, Repeat, RefreshCw, Settings, TriangleAlert, FlaskConical } from 'lucide-react';
+import { ArrowLeftRight, Briefcase, CheckCircle2, CircleAlert, CreditCard, Eye, EyeOff, LayoutGrid, Landmark, Repeat, RefreshCw, Settings, TriangleAlert, FlaskConical } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useData, useSnapshot, useStore } from '../state/StoreContext';
@@ -33,7 +33,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           Saldo
         </div>
         <nav className="side-nav" aria-label="Hovedmeny">
-          {[...NAV, { to: '/innstillinger', label: 'Innstillinger', short: 'Innstillinger', icon: Settings }].map((n) => (
+          {[
+            ...NAV,
+            { to: '/bedrift', label: 'Bedrift', short: 'Bedrift', icon: Briefcase },
+            { to: '/innstillinger', label: 'Innstillinger', short: 'Innstillinger', icon: Settings },
+          ].map((n) => (
             <NavLink key={n.to} to={n.to} end={'end' in n ? n.end : false}>
               <n.icon size={20} aria-hidden="true" />
               {n.label}

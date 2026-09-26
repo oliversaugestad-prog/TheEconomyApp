@@ -1,6 +1,7 @@
 import { cleanCounterparty, normalizeCounterparty } from '../domain/categories';
 import { todayIn } from '../domain/dates';
 import { classifyTransactions, mergeTransactions, type MergeStats } from '../domain/reconcile';
+import { emptyBusiness } from '../domain/business';
 import { detectSubscriptions, suggestionToSubscription, type SubscriptionSuggestion } from '../domain/subscriptions';
 import type { CsvRowResult } from '../domain/csv';
 import type {
@@ -14,6 +15,10 @@ import type {
   Minor,
   Settings,
   ExchangeRate,
+  BusinessData,
+  BusinessItem,
+  Holding,
+  Quote,
   Subscription,
   Transaction,
   TransactionKind,
@@ -425,6 +430,50 @@ export class SaldoStore {
       connections: d.connections.map((c) => (c.id === connectionId ? { ...c, status: 'ok' as const, error: null, consentExpiresAt: expires } : c)),
     }));
     await this.syncConnection(connectionId);
+  }
+
+  /* ------------------------------- bedrift ------------------------------- */
+
+  private updateBusiness(fn: (b: BusinessData) => BusinessData) {
+    this.update((d) => ({ ...d, business: fn(d.business ?? emptyBusiness()) }));
+  }
+
+  setBusinessName(name: string) {
+    this.updateBusiness((b) => ({ ...b, name: name.trim() || 'Bedrift' }));
+  }
+
+  upsertBusinessItem(item: BusinessItem) {
+    this.updateBusiness((b) => ({
+      ...b,
+      items: b.items.some((x) => x.id === item.id) ? b.items.map((x) => (x.id === item.id ? item : x)) : [...b.items, item],
+    }));
+  }
+
+  deleteBusinessItem(id: string) {
+    this.updateBusiness((b) => ({ ...b, items: b.items.filter((x) => x.id !== id) }));
+  }
+
+  upsertHolding(h: Holding) {
+    this.updateBusiness((b) => ({
+      ...b,
+      holdings: b.holdings.some((x) => x.id === h.id) ? b.holdings.map((x) => (x.id === h.id ? h : x)) : [...b.holdings, h],
+    }));
+  }
+
+  deleteHolding(id: string) {
+    this.updateBusiness((b) => ({ ...b, holdings: b.holdings.filter((x) => x.id !== id) }));
+  }
+
+  /** Lagrer ferske markedskurser. Kurser for aksjer som ikke lenger finnes, fjernes. */
+  setQuotes(quotes: Quote[]) {
+    if (!quotes.length) return;
+    this.updateBusiness((b) => {
+      const next: Record<string, Quote> = { ...b.quotes };
+      for (const q of quotes) next[q.symbol] = q;
+      const used = new Set(b.holdings.map((h) => h.symbol).filter(Boolean) as string[]);
+      for (const k of Object.keys(next)) if (!used.has(k)) delete next[k];
+      return { ...b, quotes: next };
+    });
   }
 
   /** Kjører kategorisering og gjenkjenning av overføringer på nytt (f.eks. etter en appoppdatering). */
