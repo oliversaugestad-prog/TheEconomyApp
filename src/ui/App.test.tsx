@@ -185,3 +185,58 @@ describe('Bedrift', () => {
     expect(store.data.accounts.some((a) => a.name === 'Driftskonto')).toBe(false);
   });
 });
+
+describe('Formue', () => {
+  it('legger inn bolig og lån privat, og viser bedriften med eierandel', async () => {
+    const { user, store } = setup('/formue');
+    const hero = () => text(screen.getByText(/Nettoformue i ditt navn/).closest('section')!);
+    const before = store.data.accounts;
+    expect(before.length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: 'Legg til bolig, bil og andre eiendeler' }));
+    let dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Navn'), 'Leilighet');
+    await user.type(within(dialog).getByLabelText('Verdi'), '3 000 000');
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+    const afterAsset = hero();
+
+    await user.click(screen.getByRole('button', { name: 'Legg til lån' }));
+    dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Navn'), 'Boliglån');
+    await user.type(within(dialog).getByLabelText('Utestående'), '2 000 000');
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+
+    expect(store.data.personalAssets?.items).toHaveLength(2);
+    expect(store.data.business).toBeUndefined();
+    expect(hero()).not.toBe(afterAsset);
+    expect(screen.getByText('Hva formuen består av')).toBeInTheDocument();
+
+    act(() => {
+      store.upsertBusinessItem({ id: 'b1', kind: 'cash', name: 'Drift', institution: '', currency: 'NOK', amount: 10_000_000, updatedAt: '' });
+    });
+    await user.click(screen.getByRole('button', { name: /Eierandel 100/ }));
+    dialog = screen.getByRole('dialog');
+    await user.clear(within(dialog).getByLabelText(/Eierandel \(%\)/));
+    await user.type(within(dialog).getByLabelText(/Eierandel \(%\)/), '50');
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+    expect(store.data.business?.ownership).toBe(50);
+    const withBiz = hero();
+    await user.click(screen.getByRole('button', { name: 'Uten bedriften' }));
+    expect(hero()).not.toBe(withBiz);
+  });
+});
+
+describe('Kredittkort manuelt', () => {
+  it('legger til et Amex-kort fra kortsiden', async () => {
+    const { user, store } = setup('/kort');
+    await user.click(screen.getByRole('button', { name: 'Legg til kort manuelt' }));
+    const dialog = screen.getByRole('dialog', { name: 'Legg til konto manuelt' });
+    expect(within(dialog).getByLabelText('Type')).toHaveValue('credit_card');
+    await user.type(within(dialog).getByLabelText('Bank / utsteder'), 'American Express');
+    await user.type(within(dialog).getByLabelText('Kontonavn'), 'Amex');
+    await user.type(within(dialog).getByLabelText('Utestående gjeld'), '4 500');
+    await user.click(within(dialog).getByRole('button', { name: 'Legg til' }));
+    const card = store.data.accounts.find((a) => a.name === 'Amex')!;
+    expect(card).toMatchObject({ type: 'credit_card', bookedBalance: -450000 });
+  });
+});

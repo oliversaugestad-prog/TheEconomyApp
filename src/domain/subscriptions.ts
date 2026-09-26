@@ -1,16 +1,7 @@
-import { CATEGORY_BY_ID, normalizeCounterparty } from './categories';
+import { CATEGORY_BY_ID, cleanCounterparty, normalizeCounterparty } from './categories';
 import { addDays, addMonths, daysBetween, parseIsoDate } from './dates';
 import { convert, sumMoney, type MoneySum } from './money';
-import type {
-  BillingInterval,
-  CategoryId,
-  CurrencyCode,
-  ExchangeRate,
-  IsoDate,
-  Minor,
-  Subscription,
-  Transaction,
-} from './types';
+import type { BillingInterval, CategoryId, CurrencyCode, ExchangeRate, IsoDate, Minor, Subscription, Transaction } from './types';
 
 export const INTERVAL_LABEL: Record<BillingInterval, string> = {
   weekly: 'Ukentlig',
@@ -90,25 +81,67 @@ export interface SubscriptionTotals {
   count: number;
 }
 
-export function subscriptionTotals(
-  subs: Subscription[],
-  base: CurrencyCode,
-  rates: ExchangeRate[],
-  kind: Subscription['kind'] | 'all' = 'subscription',
-): SubscriptionTotals {
+export function subscriptionTotals(subs: Subscription[], base: CurrencyCode, rates: ExchangeRate[], kind: Subscription['kind'] | 'all' = 'subscription'): SubscriptionTotals {
   const active = subs.filter((s) => s.status === 'active' && (kind === 'all' || s.kind === kind));
   return {
-    monthly: sumMoney(active.map((s) => ({ id: s.id, label: s.name, amount: monthlyCost(s), currency: s.currency })), base, rates),
-    yearly: sumMoney(active.map((s) => ({ id: s.id, label: s.name, amount: yearlyCost(s), currency: s.currency })), base, rates),
+    monthly: sumMoney(
+      active.map((s) => ({
+        id: s.id,
+        label: s.name,
+        amount: monthlyCost(s),
+        currency: s.currency,
+      })),
+      base,
+      rates,
+    ),
+    yearly: sumMoney(
+      active.map((s) => ({
+        id: s.id,
+        label: s.name,
+        amount: yearlyCost(s),
+        currency: s.currency,
+      })),
+      base,
+      rates,
+    ),
     count: active.length,
   };
 }
 
-/** Trekk som tilhører et abonnement (samme normaliserte mottaker), nyeste sist. */
+/** Kjente tjenester som banken skriver på mange måter («Spotify P4608E110B», «SpotifySE»). */
+const BRANDS: Array<[RegExp, string]> = [
+  [/netflix/, 'netflix'],
+  [/spotify/, 'spotify'],
+  [/storytel/, 'storytel'],
+  [/audible/, 'audible'],
+  [/viaplay/, 'viaplay'],
+  [/disney/, 'disney'],
+  [/\bhbo|\bmax\.com/, 'hbo'],
+  [/youtube/, 'youtube'],
+  [/tidal/, 'tidal'],
+  [/adobe/, 'adobe'],
+  [/puregym/, 'puregym'],
+  [/eesy/, 'eesy'],
+  [/anthropic|claude\.ai/, 'anthropic'],
+  [/openai|chatgpt/, 'openai'],
+  [/apple\.com\/bill|itunes|icloud/, 'apple'],
+];
+
+/**
+ * Nøkkel som samler trekk fra samme tjeneste. Kjente tjenester får fast navn, og
+ * referansekoder med tall (f.eks. «P471779FF7») fjernes.
+ */
+export function subscriptionKey(counterparty: string): string {
+  const lower = cleanCounterparty(counterparty).toLowerCase();
+  for (const [re, key] of BRANDS) if (re.test(lower)) return key;
+  return normalizeCounterparty(lower.replace(/\b(?=[a-z]*\d)[a-z0-9]{6,}\b/g, ' '));
+}
+
+/** Trekk som tilhører et abonnement (samme tjeneste), nyeste sist. */
 export function chargesFor(sub: Pick<Subscription, 'matchKey'>, transactions: Transaction[]): Transaction[] {
   if (!sub.matchKey) return [];
   return transactions
-    .filter((t) => t.amount < 0 && t.kind === 'normal' && normalizeCounterparty(t.counterparty) === sub.matchKey)
+    .filter((t) => t.amount < 0 && t.kind === 'normal' && (subscriptionKey(t.counterparty) === sub.matchKey || normalizeCounterparty(t.counterparty) === sub.matchKey))
     .sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
 }
 
@@ -162,66 +195,110 @@ function intervalFromDays(days: number): BillingInterval | null {
  * mottaker med jevne mellomrom og omtrent samme beløp. Resultatet er forslag
  * som brukeren må bekrefte – ikke sikre opplysninger.
  */
-export function detectSubscriptions(
-  transactions: Transaction[],
-  existing: Subscription[],
-  dismissed: string[],
-): SubscriptionSuggestion[] {
+export function detectSubscriptions(transactions: Transaction[], existing: Subscription[], dismissed: string[]): SubscriptionSuggestion[] {
   const skip = new Set([...existing.map((s) => s.matchKey).filter(Boolean), ...dismissed] as string[]);
   const groups = new Map<string, Transaction[]>();
   for (const t of transactions) {
     if (t.amount >= 0 || t.kind !== 'normal') continue;
     if (t.category === 'dagligvarer' || t.category === 'restaurant') continue;
-    const key = normalizeCounterparty(t.counterparty);
-    if (!key || skip.has(key)) continue;
+    const key = subscriptionKey(t.counterparty);
+    if (!key || skip.has(key) || skip.has(normalizeCounterparty(t.counterparty))) continue;
     const list = groups.get(key) ?? [];
     list.push(t);
     groups.set(key, list);
   }
 
+  const latest = transactions.reduce((m, t) => (t.bookingDate > m ? t.bookingDate : m), '');
   const out: SubscriptionSuggestion[] = [];
   for (const [key, list] of groups) {
     const txs = list.slice().sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
-    // Maks ett trekk per 5 dager (unngå at flere handler samme uke tolkes som mønster).
-    if (txs.length < 2) continue;
-    const gaps = txs.slice(1).map((t, i) => daysBetween(txs[i].bookingDate, t.bookingDate));
-    if (gaps.some((g) => g < 5)) continue;
-    const interval = intervalFromDays(median(gaps));
-    if (!interval) continue;
-    const minCount = interval === 'yearly' ? 2 : 3;
-    if (txs.length < minCount) continue;
-    const amounts = txs.map((t) => -t.amount);
-    const med = median(amounts);
-    const spread = Math.max(...amounts.map((a) => Math.abs(a - med) / med));
-    if (spread > 0.25) continue;
-    const regular = gaps.every((g) => intervalFromDays(g) === interval);
-    const last = txs[txs.length - 1];
-    const category = last.category;
-    const kind: Subscription['kind'] = category === 'bolig' || med >= 500_000 ? 'fixed' : 'subscription';
-    out.push({
-      matchKey: key,
-      name: prettyName(last.counterparty),
-      amount: -last.amount,
-      currency: last.currency,
-      interval,
-      accountId: last.accountId,
-      anchorDate: last.bookingDate,
-      occurrences: txs.length,
-      kind,
-      category: CATEGORY_BY_ID[category]?.type === 'expense' ? category : 'abonnementer',
-      confidence: Math.min(1, (regular ? 0.5 : 0.25) + (spread < 0.02 ? 0.3 : 0.1) + Math.min(0.2, txs.length * 0.05)),
-      priceChange: detectPriceChange(txs),
-    });
+    const strict = strictPattern(key, txs);
+    if (strict) out.push(strict);
+    else if (txs[txs.length - 1].category === 'abonnementer') {
+      const loose = loosePattern(key, txs, latest);
+      if (loose) out.push(loose);
+    }
   }
   return out.sort((a, b) => b.confidence - a.confidence || b.amount - a.amount);
 }
 
+/**
+ * Trekk som er kategorisert som abonnement, men uten et helt jevnt mønster
+ * (f.eks. to trekk samme dag, flere mobilnumre eller bare ett-to trekk så langt).
+ * Foreslås som månedlig med månedens samlede beløp, markert som «mulig».
+ */
+function loosePattern(key: string, txs: Transaction[], latest: IsoDate): SubscriptionSuggestion | null {
+  const last = txs[txs.length - 1];
+  if (latest && daysBetween(last.bookingDate, latest) > 45) return null;
+  const perMonth = new Map<string, Minor>();
+  for (const t of txs.filter((x) => x.currency === last.currency)) perMonth.set(t.bookingDate.slice(0, 7), (perMonth.get(t.bookingDate.slice(0, 7)) ?? 0) - t.amount);
+  // Den største posten i siste måned regnes som trekkdato.
+  const main = txs.filter((t) => t.bookingDate.slice(0, 7) === last.bookingDate.slice(0, 7)).reduce((m, t) => (t.amount < m.amount ? t : m));
+  const amount = Math.round(median([...perMonth.values()]));
+  return {
+    matchKey: key,
+    name: displayName(last.counterparty),
+    amount,
+    currency: last.currency,
+    interval: 'monthly',
+    accountId: last.accountId,
+    anchorDate: main.bookingDate,
+    occurrences: txs.length,
+    kind: 'subscription',
+    category: 'abonnementer',
+    confidence: 0.2,
+    priceChange: null,
+  };
+}
+
+function strictPattern(key: string, txs: Transaction[]): SubscriptionSuggestion | null {
+  // Maks ett trekk per 5 dager (unngå at flere handler samme uke tolkes som mønster).
+  if (txs.length < 2) return null;
+  const gaps = txs.slice(1).map((t, i) => daysBetween(txs[i].bookingDate, t.bookingDate));
+  if (gaps.some((g) => g < 5)) return null;
+  const interval = intervalFromDays(median(gaps));
+  if (!interval) return null;
+  const minCount = interval === 'yearly' ? 2 : 3;
+  if (txs.length < minCount) return null;
+  const amounts = txs.map((t) => -t.amount);
+  const med = median(amounts);
+  const spread = Math.max(...amounts.map((a) => Math.abs(a - med) / med));
+  if (spread > 0.25) return null;
+  const regular = gaps.every((g) => intervalFromDays(g) === interval);
+  const last = txs[txs.length - 1];
+  const category = last.category;
+  const kind: Subscription['kind'] = category === 'bolig' || med >= 500_000 ? 'fixed' : 'subscription';
+  return {
+    matchKey: key,
+    name: prettyName(last.counterparty),
+    amount: -last.amount,
+    currency: last.currency,
+    interval,
+    accountId: last.accountId,
+    anchorDate: last.bookingDate,
+    occurrences: txs.length,
+    kind,
+    category: CATEGORY_BY_ID[category]?.type === 'expense' ? category : 'abonnementer',
+    confidence: Math.min(1, (regular ? 0.5 : 0.25) + (spread < 0.02 ? 0.3 : 0.1) + Math.min(0.2, txs.length * 0.05)),
+    priceChange: detectPriceChange(txs),
+  };
+}
+
+/** Visningsnavn uten betalingsformidler og referansekoder. */
+function displayName(counterparty: string): string {
+  const cleaned = cleanCounterparty(counterparty)
+    .replace(/\s+\b(?=[A-Za-z]*\d)[A-Za-z0-9]{6,}\b/g, '')
+    .trim();
+  return prettyName(cleaned || counterparty);
+}
+
 export function prettyName(counterparty: string): string {
-  const base = counterparty.replace(/\*.*$/, '').replace(/\.(com|no)$/i, '').trim();
+  const base = counterparty
+    .replace(/\*.*$/, '')
+    .replace(/\.(com|no)$/i, '')
+    .trim();
   if (base === base.toUpperCase() && base.length > 3) {
-    return base
-      .toLowerCase()
-      .replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+    return base.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
   }
   return base;
 }

@@ -20,11 +20,11 @@ function toInput(v: number | null, currency: string) {
 }
 
 /** Legg til en manuell konto eller et kort. Ber aldri om komplette kontonummer eller kortdetaljer. */
-export function AddAccountDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: (a: Account) => void }) {
+export function AddAccountDialog({ open, onClose, onCreated, initialType = 'checking' }: { open: boolean; onClose: () => void; onCreated?: (a: Account) => void; initialType?: AccountType }) {
   const store = useStore();
   const [bankName, setBank] = useState('');
   const [name, setName] = useState('');
-  const [type, setType] = useState<AccountType>('checking');
+  const [type, setType] = useState<AccountType>(initialType);
   const [currency, setCurrency] = useState('NOK');
   const [booked, setBooked] = useState('');
   const [available, setAvailable] = useState('');
@@ -35,7 +35,7 @@ export function AddAccountDialog({ open, onClose, onCreated }: { open: boolean; 
   const reset = () => {
     setBank('');
     setName('');
-    setType('checking');
+    setType(initialType);
     setCurrency('NOK');
     setBooked('');
     setAvailable('');
@@ -80,11 +80,11 @@ export function AddAccountDialog({ open, onClose, onCreated }: { open: boolean; 
         <div className="form-grid two">
           <label className="field">
             <span>Bank / utsteder</span>
-            <input className="input" value={bankName} onChange={(e) => setBank(e.target.value)} placeholder="F.eks. Lokalbanken" autoComplete="off" required />
+            <input className="input" value={bankName} onChange={(e) => setBank(e.target.value)} placeholder={type === 'credit_card' ? 'F.eks. American Express' : 'F.eks. Lokalbanken'} autoComplete="off" required />
           </label>
           <label className="field">
             <span>Kontonavn</span>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="F.eks. Brukskonto" autoComplete="off" required />
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={type === 'credit_card' ? 'F.eks. Amex Gold' : 'F.eks. Brukskonto'} autoComplete="off" required />
           </label>
           <label className="field">
             <span>Type</span>

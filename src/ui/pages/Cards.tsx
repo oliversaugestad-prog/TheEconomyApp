@@ -1,12 +1,13 @@
-import { CreditCard, Pencil, Receipt } from 'lucide-react';
+import { CreditCard, Pencil, Plus, Receipt } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { availableCredit, cardDebt, reservedAmount, sortByDateDesc } from '../../domain/calculations';
 import { formatDate, formatMonth, monthKey } from '../../domain/dates';
 import { formatMoney, parseAmount, sumMoney } from '../../domain/money';
 import type { Account, CardStatement, Transaction } from '../../domain/types';
 import { useData, useStore, useToday } from '../../state/StoreContext';
 import { Amount } from '../components/Amount';
+import { AddAccountDialog } from '../components/AccountForms';
 import { Dialog } from '../components/Dialog';
 import { ConnectionBadge, DemoBadge, Empty, LastUpdated, Notice } from '../components/common';
 import { IncompleteMark } from '../components/SumBreakdown';
@@ -73,12 +74,22 @@ export function CardsPage() {
   const debt = sumMoney(included.map((c) => ({ id: c.id, label: c.name, amount: cardDebt(c), currency: c.currency })), base, data.rates);
   const reserved = sumMoney(included.map((c) => ({ id: c.id, label: c.name, amount: reservedAmount(c.id, data.transactions), currency: c.currency })), base, data.rates);
   const month = monthKey(today);
+  const [adding, setAdding] = useState(false);
+  const navigate = useNavigate();
 
   return (
-    <Page title="Kredittkort">
+    <Page
+      title="Kredittkort"
+      actions={
+        <button type="button" className="icon-btn" aria-label="Legg til kort manuelt" onClick={() => setAdding(true)}>
+          <Plus size={20} aria-hidden="true" />
+        </button>
+      }
+    >
+      <AddAccountDialog open={adding} initialType="credit_card" onClose={() => setAdding(false)} onCreated={(a) => navigate(`/kort/${a.id}`)} />
       {cards.length === 0 ? (
         <div className="card">
-          <Empty icon={<CreditCard size={24} />} title="Ingen kredittkort" action={<Link to="/kontoer?ny=1" className="btn small">Legg til kort manuelt</Link>}>
+          <Empty icon={<CreditCard size={24} />} title="Ingen kredittkort" action={<button type="button" className="btn small" onClick={() => setAdding(true)}>Legg til kort manuelt</button>}>
             Kort du legger til manuelt eller kobler til, vises her.
           </Empty>
         </div>

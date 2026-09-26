@@ -29,11 +29,12 @@ export function SubscriptionsPage() {
   const store = useStore();
   const today = useToday();
   const base = data.settings.baseCurrency;
-  const [tab, setTab] = useState<Tab>('subscription');
   const [editing, setEditing] = useState<Subscription | null>(null);
   const [creating, setCreating] = useState(false);
 
   const suggestions = useMemo(() => detectSubscriptions(data.transactions, data.subscriptions, data.dismissedSuggestions), [data]);
+  // Uten bekreftede abonnementer åpnes forslagene direkte, så de ikke overses.
+  const [tab, setTab] = useState<Tab>(() => (!data.subscriptions.some((s) => s.status === 'active') && suggestions.length ? 'suggestions' : 'subscription'));
   const subsTotal = useMemo(() => subscriptionTotals(data.subscriptions, base, data.rates, 'subscription'), [data, base]);
   const fixedTotal = useMemo(() => subscriptionTotals(data.subscriptions, base, data.rates, 'fixed'), [data, base]);
   const accById = useMemo(() => new Map(data.accounts.map((a) => [a.id, a])), [data.accounts]);
