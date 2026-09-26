@@ -40,4 +40,12 @@ describe('synkronisering av ekte tilkobling', () => {
     expect(store.data.transactions[0].counterparty).toBe('Storytel');
     expect(store.data.connections[0].lastSuccessfulSync).toBe('2026-09-26T17:00:00Z');
   });
+
+  it('rydder bankens visningsnavn på eldre transaksjoner', () => {
+    const store = new SaldoStore(memoryRepository(), () => new Date('2026-09-26T17:00:00Z'), false);
+    const old = { id: 't-old', accountId: 'a', externalId: 'x1', bookingDate: '2026-08-01', amount: -500, currency: 'NOK', counterparty: 'Udbetaling   PIZZA OTTO', description: '', status: 'booked' as const, category: 'annet' as const, kind: 'normal' as const, linkedTransactionId: null, userCategorized: false, userKind: false, isDemo: false, source: 'bank' as const };
+    (store as unknown as { snapshot: { data: { transactions: unknown[] } } }).snapshot.data.transactions = [old];
+    store.updateSettings({ ownNames: ['Test Testesen'] });
+    expect(store.data.transactions[0]).toMatchObject({ counterparty: 'PIZZA OTTO', category: 'restaurant' });
+  });
 });
