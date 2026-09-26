@@ -7,9 +7,24 @@
     <meta name="description" content="Saldo – samlet oversikt over kontoer, transaksjoner, abonnementer og kredittkort." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%232f6be0'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='17' font-weight='700' fill='white' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
     <title>Saldo</title>
+    <style>
+      /* Vises bare hvis appen ikke starter (f.eks. når filen åpnes direkte). */
+      .boot { font-family: system-ui, sans-serif; color: #f2f5fa; background: #05070c; min-height: 100vh; margin: 0; padding: 32px 16px; box-sizing: border-box; opacity: 0; animation: boot-show 0s 2s forwards; }
+      .boot h1 { font-size: 20px; margin: 0 0 12px; }
+      .boot p { color: #b0b9ca; max-width: 34rem; line-height: 1.5; }
+      .boot code { color: #7fb2ff; }
+      @keyframes boot-show { to { opacity: 1; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot">
+        <h1>Saldo starter ikke</h1>
+        <p>Appen må kjøres gjennom en server, ikke ved å åpne <code>index.html</code> direkte i nettleseren.</p>
+        <p>Kjør <code>npm install</code> og deretter <code>npm run dev</code> i prosjektmappen, og åpne adressen som vises i terminalen (vanligvis <code>http://localhost:5173</code>).</p>
+        <p>For et produksjonsbygg: <code>npm run build</code> og <code>npm run preview</code>.</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
