@@ -4,6 +4,7 @@ import type { SaldoStore } from '../state/store';
 import { StoreProvider } from '../state/StoreContext';
 import { Empty } from './components/common';
 import { AppShell, Page } from './Layout';
+import { BankBridge } from './BankBridge';
 import { AccountDetailPage } from './pages/AccountDetail';
 import { AccountsPage } from './pages/Accounts';
 import { CardDetailPage, CardsPage } from './pages/Cards';
@@ -54,7 +55,9 @@ export function App({ store }: { store: SaldoStore }) {
   return (
     <StoreProvider store={store}>
       <HashRouter>
-        <AppRoutes />
+        <BankBridge>
+          <AppRoutes />
+        </BankBridge>
       </HashRouter>
     </StoreProvider>
   );

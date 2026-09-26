@@ -1,6 +1,39 @@
 # Bankintegrasjon og veien til produksjon
 
-Denne versjonen av Saldo har **ingen ekte banktilkobling**. Den bruker syntetiske demodata, manuelle kontoer og CSV-import. Dette dokumentet beskriver hva som er undersøkt, hva som faktisk er bekreftet, og hva som kreves.
+Saldo kan hente ekte bankdata via **Enable Banking** i deres gratis «restricted»-modus, som bare gir tilgang til kontoer eieren selv har koblet til. Det er ment for privat, ikke-kommersiell bruk. Demodata, manuelle kontoer og CSV-import fungerer fortsatt.
+
+## Slik er det satt opp
+
+```
+Nettleser (GitHub Pages)  ──innlogging──▶  Supabase Auth (e-postlenke, PKCE)
+        │                                        │
+        │  bruker-JWT                            ▼
+        ├──────────────▶  Edge Function «bank»  ──JWT signert med privat nøkkel──▶  Enable Banking API
+        │                   │   (supabase/functions/bank)                              │
+        │                   │                                                          ▼
+        │                   ├─ Vault: privat nøkkel (kryptert)                    Bankens BankID
+        │                   └─ eb_sessions: samtykker (kun server)                      │
+        │                                                                              │
+        ◀──────── tilbake til appen (#/kontoer?bank=ok) ◀── GET /functions/v1/bank ◀───┘
+        │
+        └─ user_state (radnivåsikkerhet: bare eieren)  ◀── Saldo-data (kontoer, transaksjoner, regler)
+```
+
+- **Innlogging:** engangslenke på e-post. Bare adresser i tabellen `allowed_users` får bruke bankfunksjonene.
+- **Nøkkel:** .pem-filen lastes opp i Innstillinger → Banktilkobling. Serveren tester den mot Enable Banking og lagrer den i Supabase Vault. Den sendes aldri tilbake til nettleseren.
+- **Samtykker:** sesjons-ID-er fra Enable Banking lagres bare i `eb_sessions`, som nettleseren ikke kan lese.
+- **Henting:** brukeren trykker «Oppdater». Serveren henter saldo og transaksjoner (første gang 90 dager tilbake, deretter fra 14 dager før forrige henting) og sender dem til appen. Appen bruker de samme reglene for duplikater, reservasjoner, overføringer og refusjoner som ellers.
+- **Frakobling:** samtykket slettes hos Enable Banking. Lagrede data kan beholdes eller slettes.
+- **Database:** oppsettet ligger i `supabase/migrations/`.
+
+Engangsoppsett (gjøres av eieren):
+
+1. Registrer en Production-applikasjon hos Enable Banking og koble til egne kontoer.
+2. Legg til `https://yxkzcnduisekbugqvgwk.supabase.co/functions/v1/bank` som tillatt redirect URL i applikasjonen.
+3. I Supabase: Authentication → URL Configuration → Site URL = `https://oliversaugestad-prog.github.io/TheEconomyApp/`.
+4. Logg inn i Saldo og last opp .pem-filen under Innstillinger.
+
+**Ikke verifisert ennå:** hvordan hver enkelt bank oppgir saldo på kredittkort (fortegn) og om den leverer reserverte transaksjoner. Dette sees først ved første ekte henting.
 
 ## Hva som er undersøkt (september 2026)
 

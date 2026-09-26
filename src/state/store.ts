@@ -57,12 +57,14 @@ export class SaldoStore {
   constructor(
     private repo: Repository,
     private clock: () => Date = () => new Date(),
+    seedDemo = true,
   ) {
     const loaded = repo.load();
     let data = loaded;
     if (!data) {
-      // Første gang: start i demomodus slik at appen kan utforskes umiddelbart.
-      data = buildWithDemo(emptyData(), this.clock());
+      // Første gang lokalt: start i demomodus slik at appen kan utforskes umiddelbart.
+      // Med innlogging (egne data) startes det tomt.
+      data = seedDemo ? buildWithDemo(emptyData(), this.clock()) : emptyData();
       repo.save(data);
     }
     this.snapshot = { data, syncing: [], syncMessage: null };
@@ -402,6 +404,31 @@ export class SaldoStore {
     await this.syncConnection(connectionId);
   }
 
+  /** Viser en melding i statuslinjen. */
+  notify(tone: 'ok' | 'warn' | 'error', text: string) {
+    this.set({ syncMessage: { tone, text } }, false);
+  }
+
+  /**
+   * Oppdaterer tilkoblinger fra en ekte datakilde. Tilkoblinger fra samme kilde som
+   * ikke lenger finnes der, merkes som frakoblet – dataene deres beholdes.
+   */
+  upsertConnections(providerId: string, fresh: Connection[]) {
+    this.update((d) => {
+      const ids = new Set(fresh.map((c) => c.id));
+      const kept = d.connections.map((c) => {
+        const f = fresh.find((x) => x.id === c.id);
+        if (f) return { ...f, lastAttempt: c.lastAttempt ?? f.lastAttempt };
+        if (c.providerId === providerId && !ids.has(c.id) && c.status !== 'disconnected') {
+          return { ...c, status: 'disconnected' as const, error: null, consentExpiresAt: null };
+        }
+        return c;
+      });
+      const added = fresh.filter((f) => !d.connections.some((c) => c.id === f.id));
+      return { ...d, connections: [...kept, ...added] };
+    });
+  }
+
   async syncAll(): Promise<void> {
     const targets = this.data.connections.filter(
       (c) => c.status !== 'disconnected' && c.providerId !== 'manual' && getProvider(c.providerId),
@@ -448,6 +475,10 @@ export class SaldoStore {
             card: fresh.card ? { ...fresh.card, statement: fresh.card.statement ?? manualStatement } : undefined,
           };
         });
+        // Nye kontoer fra kilden (f.eks. første henting etter tilkobling) legges til.
+        for (const fresh of outcome.accounts) {
+          if (!accounts.some((a) => a.id === fresh.id)) accounts.push(fresh);
+        }
         return this.reclassify({
           ...d,
           connections: replaceConn(d.connections, outcome.connection),

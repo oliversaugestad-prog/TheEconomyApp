@@ -8,7 +8,9 @@ import { useData, useStore } from '../../state/StoreContext';
 import { Dialog } from '../components/Dialog';
 import { ConnectionBadge, DemoBadge, Notice, Segmented, Switch } from '../components/common';
 import { Page } from '../Layout';
-import { ConnectBankDialog } from './Accounts';
+import { ConnectBankDialog } from '../components/ConnectBank';
+import { BankSetup } from '../components/BankSetup';
+import { useBackend } from '../../backend/session';
 
 const CURRENCIES = ['NOK', 'EUR', 'SEK', 'DKK', 'USD', 'GBP'];
 
@@ -27,6 +29,9 @@ export function SettingsPage() {
   const [confirm, setConfirm] = useState<'demo' | 'all' | null>(null);
   const [connecting, setConnecting] = useState(false);
   const hasDemo = store.hasDemoData();
+  const backend = useBackend();
+  const remote = backend.mode === 'remote';
+  const hasBank = data.connections.some((c) => c.providerId === 'enablebanking' && c.status !== 'disconnected');
   const ownAccounts = data.accounts.filter((a) => !a.isDemo);
   const foreign = [...new Set(data.accounts.map((a) => a.currency).filter((c) => c !== s.baseCurrency))];
 
@@ -56,7 +61,9 @@ export function SettingsPage() {
             Bankene «Nordlys Bank», «Fjordsparebanken» og «Vidde Kreditt» er fiktive, og alle tall er syntetiske. Ingen ekte bank er tilkoblet.
           </Notice>
         ) : (
-          <Notice title="Egne data">Du bruker manuelle kontoer og CSV-import. Ingen ekte bank er tilkoblet.</Notice>
+          <Notice title="Egne data">
+            {hasBank ? 'Du bruker data fra tilkoblede banker, i tillegg til eventuelle manuelle kontoer og CSV-import.' : 'Du bruker manuelle kontoer og CSV-import. Ingen bank er tilkoblet ennå.'}
+          </Notice>
         )}
         <p className="small muted">
           Du har {ownAccounts.length} egne kontoer. Å fjerne demodata sletter bare demokontoene og transaksjonene deres – egne kontoer og importerte data beholdes.
@@ -66,7 +73,7 @@ export function SettingsPage() {
             <button type="button" className="btn" onClick={() => setConfirm('demo')}>
               <FlaskConical size={16} aria-hidden="true" /> Fjern demodata
             </button>
-          ) : (
+          ) : remote ? null : (
             <button type="button" className="btn" onClick={() => store.loadDemo()}>
               <FlaskConical size={16} aria-hidden="true" /> Last inn demodata
             </button>
@@ -78,6 +85,8 @@ export function SettingsPage() {
           )}
         </div>
       </section>
+
+      <BankSetup />
 
       <section className="card flush" aria-labelledby="conn-h">
         <div className="card-head" style={{ padding: '18px 18px 0' }}>
@@ -199,7 +208,11 @@ export function SettingsPage() {
         <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
           <li>Saldo leser og organiserer økonomidata. Appen kan ikke gjennomføre betalinger.</li>
           <li>Saldo ber aldri om bankpassord, BankID-opplysninger eller fullstendige kortnummer. Bare de siste sifrene lagres.</li>
-          <li>I denne versjonen lagres alt kun i denne nettleseren (localStorage). Det er ikke kryptert og sendes ikke til noen server.</li>
+          {remote ? (
+            <li>Dataene dine lagres i Saldos database hos Supabase i EU (kryptert lagring). Radnivåsikkerhet sørger for at bare du kan lese dem. Banknøkkelen ligger i et kryptert hvelv på serveren.</li>
+          ) : (
+            <li>I demomodus lagres alt kun i denne nettleseren (localStorage). Det er ikke kryptert og sendes ikke til noen server.</li>
+          )}
           <li>Å koble fra en bank stopper videre henting. Allerede lagrede data slettes bare hvis du velger det.</li>
           <li>Dette er en prototype. Den er ikke sikkerhetsrevidert og ikke klar for ekte bankdata i produksjon.</li>
         </ul>
