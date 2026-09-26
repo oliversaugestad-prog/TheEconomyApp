@@ -612,6 +612,11 @@ p {
 }
 .btn.block {
   width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+.btn svg {
+  flex: none;
 }
 .btn:disabled,
 .btn[aria-disabled='true'] {
@@ -1482,4 +1487,41 @@ hr.sep {
   .desktop-only {
     display: none !important;
   }
+}
+
+/* ------------------------------ Innlogging ------------------------------ */
+
+.login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: 24px 16px;
+  background: radial-gradient(120% 70% at 50% 0%, var(--accent-soft), transparent 60%), var(--bg);
+}
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 28px 22px;
+  box-shadow: var(--shadow);
+}
+.boot {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+.code-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 4px 8px;
+  overflow-wrap: anywhere;
+  user-select: all;
 }

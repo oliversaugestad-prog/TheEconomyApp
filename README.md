@@ -2,7 +2,9 @@
 
 Saldo er en privatøkonomi-app som samler kontoer, transaksjoner, abonnementer og kredittkort på ett sted. Den er laget for en privatperson i Norge med kontoer i flere banker. Appen er på norsk bokmål og bruker NOK og norske tall- og datoformater (`24 850,50 kr`).
 
-> **Status:** Dette er en fungerende prototype med **syntetiske demodata**. Ingen ekte bank er koblet til. Appen er ikke sikkerhetsrevidert og ikke klar for ekte bankdata i produksjon. Se [docs/BANKINTEGRASJON.md](docs/BANKINTEGRASJON.md).
+> **Status:** Fungerende prototype. Uten innlogging kjører den med **syntetiske demodata**. Innlogget kan eieren koble til egne banker via Enable Banking (PSD2), og dataene lagres i Supabase (EU). Appen er ikke sikkerhetsrevidert. Se [docs/BANKINTEGRASJON.md](docs/BANKINTEGRASJON.md).
+
+**Nettadresse:** https://oliversaugestad-prog.github.io/TheEconomyApp/ (publiseres automatisk fra `main`).
 
 ## Kom i gang
 

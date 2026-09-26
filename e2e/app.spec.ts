@@ -4,7 +4,21 @@ const ROUTES = ['/', '/kontoer', '/kontoer/demo-acc-bruk', '/kontoer/import', '/
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.setItem('saldo:demo', '1');
+  });
+  await page.reload();
+  await expect(page.getByText('Samlet kontosaldo')).toBeVisible();
+});
+
+test('innloggingssiden vises uten innlogging og slipper inn i demo', async ({ page }) => {
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Logg inn' })).toBeVisible();
+  await expect(page.getByLabel('E-post')).toBeVisible();
+  await page.getByRole('button', { name: /Utforsk med demodata/ }).click();
+  await expect(page.getByText('Samlet kontosaldo')).toBeVisible();
 });
 
 test('ingen horisontal scrolling på noen side', async ({ page }) => {

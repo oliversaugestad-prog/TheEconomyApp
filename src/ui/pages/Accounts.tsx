@@ -5,7 +5,10 @@ import { availableCredit, cardDebt, reservedAmount } from '../../domain/calculat
 import { formatTimestamp } from '../../domain/dates';
 import { sumMoney } from '../../domain/money';
 import type { Account, Connection } from '../../domain/types';
-import { enableBankingProvider } from '../../providers/enableBanking';
+import { EB_PROVIDER_ID, sessionIdOf } from '../../providers/enableBanking';
+import { BankApiError, callBank } from '../../backend/supabase';
+import { ConnectBankDialog, startBankLogin } from '../components/ConnectBank';
+import { useBankStatus } from '../BankBridge';
 import { useData, useSnapshot, useStore } from '../../state/StoreContext';
 import { ACCOUNT_TYPE_LABEL, AddAccountDialog } from '../components/AccountForms';
 import { Amount } from '../components/Amount';
@@ -140,9 +143,26 @@ export function AccountsPage() {
 
 function ConnectionActions({ connection, busy, onDisconnect }: { connection: Connection; busy: boolean; onDisconnect: () => void }) {
   const store = useStore();
+  const { status } = useBankStatus();
+  const [reconnecting, setReconnecting] = useState(false);
   if (connection.providerId === 'manual') return null;
+  const session = status?.sessions.find((s) => `eb-${s.id}` === connection.id);
+  const reconnect = async () => {
+    setReconnecting(true);
+    try {
+      await startBankLogin({ name: connection.institutionName, country: session?.aspspCountry ?? 'NO', maxConsentSeconds: null });
+    } catch (e) {
+      store.notify('error', e instanceof BankApiError ? e.message : 'Kunne ikke starte ny innlogging.');
+      setReconnecting(false);
+    }
+  };
   return (
     <div className="row wrap" style={{ gap: 8 }}>
+      {connection.providerId === EB_PROVIDER_ID && (connection.status === 'reauth_required' || connection.status === 'disconnected') && (
+        <button type="button" className="btn primary small" disabled={reconnecting} onClick={reconnect}>
+          <RefreshCw size={16} className={reconnecting ? 'spin' : ''} aria-hidden="true" /> Koble til på nytt med BankID
+        </button>
+      )}
       {connection.status === 'reauth_required' && connection.isDemo && (
         <button type="button" className="btn primary small" disabled={busy} onClick={() => store.reauthorizeDemo(connection.id)}>
           <RefreshCw size={16} aria-hidden="true" /> Forny samtykke (demo)
@@ -210,51 +230,29 @@ function AccountRow({ account: a }: { account: Account }) {
   );
 }
 
-export function ConnectBankDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const avail = enableBankingProvider.availability();
-  return (
-    <Dialog open={open} onClose={onClose} title="Koble til bank">
-      <div className="stack">
-        <Notice tone="warn" title="Ekte banktilkobling er ikke aktivert">
-          {avail.reason} Saldo viser ikke noe som om en ekte bank var tilkoblet.
-        </Notice>
-        <div className="stack-sm">
-          <h3>Slik vil det fungere</h3>
-          <ol className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
-            <li>Du velger banken din i Saldo.</li>
-            <li>Du sendes til bankens egen innlogging (BankID) via en lisensiert kontoinformasjonstjeneste (PSD2).</li>
-            <li>Du godkjenner lesetilgang til saldo og transaksjoner i en begrenset periode (typisk 90–180 dager, avhengig av bank og regelverk).</li>
-            <li>Saldo henter data via en server. Saldo ser aldri bankpassordet ditt og kan ikke gjennomføre betalinger.</li>
-          </ol>
-        </div>
-        <div className="stack-sm">
-          <h3>Dette mangler</h3>
-          <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
-            {avail.requirements?.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-        </div>
-        <p className="small muted">I mellomtiden kan du legge til kontoer manuelt og importere transaksjoner fra CSV-filer eksportert fra nettbanken.</p>
-        <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
-          <Link to="/kontoer/import" className="btn" onClick={onClose}>
-            Importer CSV
-          </Link>
-          <button type="button" className="btn primary" onClick={onClose}>
-            Forstått
-          </button>
-        </div>
-      </div>
-    </Dialog>
-  );
-}
-
 function DisconnectDialog({ connection, onClose }: { connection: Connection; onClose: () => void }) {
   const store = useStore();
   const data = useData();
   const accounts = data.accounts.filter((a) => a.connectionId === connection.id);
   const txCount = data.transactions.filter((t) => accounts.some((a) => a.id === t.accountId)).length;
   const tz = data.settings.timeZone;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Ekte tilkobling: trekk tilbake samtykket hos Enable Banking først.
+  const revoke = async (): Promise<boolean> => {
+    if (connection.providerId !== EB_PROVIDER_ID || connection.status === 'disconnected') return true;
+    setBusy(true);
+    setError(null);
+    try {
+      await callBank('disconnect', { sessionId: sessionIdOf(connection) });
+      return true;
+    } catch (e) {
+      setError(e instanceof BankApiError ? e.message : 'Kunne ikke koble fra hos banken.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <Dialog open onClose={onClose} title={`Koble fra ${connection.institutionName}`}>
       <div className="stack">
@@ -262,27 +260,33 @@ function DisconnectDialog({ connection, onClose }: { connection: Connection; onC
           Å koble fra stopper videre henting av data. Det er noe annet enn å slette dataene som allerede er lagret: {accounts.length} konto(er) og {txCount} transaksjoner
           {connection.lastSuccessfulSync ? ` (sist hentet ${formatTimestamp(connection.lastSuccessfulSync, tz)})` : ''}.
         </p>
-        {!connection.isDemo && connection.providerId !== 'manual' && (
-          <p className="small muted">For ekte tilkoblinger bør du også trekke tilbake samtykket i nettbanken din.</p>
+        {connection.providerId === EB_PROVIDER_ID && (
+          <p className="small muted">Samtykket hos Enable Banking trekkes tilbake. Du kan også se og trekke tilbake samtykker i nettbanken din.</p>
         )}
+        {error && <Notice tone="error">{error}</Notice>}
         <div className="stack-sm">
           <button
             type="button"
             className="btn block"
-            onClick={() => {
-              store.disconnect(connection.id, false);
-              onClose();
+            onClick={async () => {
+              if (await revoke()) {
+                store.disconnect(connection.id, false);
+                onClose();
+              }
             }}
-            disabled={connection.status === 'disconnected'}
+            disabled={connection.status === 'disconnected' || busy}
           >
             Koble fra, men behold data
           </button>
           <button
             type="button"
             className="btn danger block"
-            onClick={() => {
-              store.disconnect(connection.id, true);
-              onClose();
+            disabled={busy}
+            onClick={async () => {
+              if (await revoke()) {
+                store.disconnect(connection.id, true);
+                onClose();
+              }
             }}
           >
             Koble fra og slett lagrede data
