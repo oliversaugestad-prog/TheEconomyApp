@@ -1,4 +1,4 @@
-import { CalendarClock, Check, Plus, Repeat, Sparkles, TrendingUp, X } from 'lucide-react';
+import { Briefcase, CalendarClock, Check, Plus, Repeat, Sparkles, TrendingUp, X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { CATEGORIES } from '../../domain/categories';
 import { formatDate, relativeDay } from '../../domain/dates';
@@ -40,6 +40,7 @@ export function SubscriptionsPage() {
   const [tab, setTab] = useState<Tab>(() => (!data.subscriptions.some((s) => s.status === 'active') && suggestions.length ? 'suggestions' : 'subscription'));
   const subsTotal = useMemo(() => subscriptionTotals(data.subscriptions, base, data.rates, 'subscription'), [data, base]);
   const fixedTotal = useMemo(() => subscriptionTotals(data.subscriptions, base, data.rates, 'fixed'), [data, base]);
+  const businessTotal = useMemo(() => subscriptionTotals(data.subscriptions, base, data.rates, 'all', 'business'), [data, base]);
   const accById = useMemo(() => new Map(data.accounts.map((a) => [a.id, a])), [data.accounts]);
 
   const list = data.subscriptions
@@ -81,6 +82,15 @@ export function SubscriptionsPage() {
             <Amount value={fixedTotal.monthly.amount} currency={base} />
           </p>
           <p className="xsmall subtle">Husleie, strøm og lignende holdes adskilt fra abonnementene. {fixedTotal.count} registrert.</p>
+          {businessTotal.count > 0 && (
+            <>
+              <hr className="sep" style={{ margin: '14px 0' }} />
+              <p className="small muted">Bedriftens abonnementer (betalt av deg)</p>
+              <p style={{ fontWeight: 600 }}>
+                <Amount value={businessTotal.monthly.amount} currency={base} /> <span className="small muted">/ mnd · {businessTotal.count} stk – ikke med i summene over</span>
+              </p>
+            </>
+          )}
           <hr className="sep" style={{ margin: '14px 0' }} />
           <p className="small muted">Forslag som venter på deg</p>
           <p style={{ fontWeight: 600 }}>
@@ -125,6 +135,7 @@ export function SubscriptionsPage() {
                         <span className="li-title row" style={{ gap: 6 }}>
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
                           {s.isDemo && <DemoBadge />}
+                          {s.business && <span className="badge">Bedrift</span>}
                         </span>
                         <span className="li-sub" style={{ display: 'block' }}>
                           {intervalText(s)}
@@ -283,6 +294,7 @@ function SubscriptionDialog({
   const [accountId, setAccountId] = useState(sub?.accountId ?? '');
   const [anchorDate, setAnchor] = useState(sub?.anchorDate ?? today);
   const [kind, setKind] = useState<Subscription['kind']>(sub?.kind ?? defaultKind);
+  const [business, setBusiness] = useState(!!sub?.business);
   const [category, setCategory] = useState<CategoryId>(sub?.category ?? (defaultKind === 'fixed' ? 'bolig' : 'abonnementer'));
   const [error, setError] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -311,6 +323,7 @@ function SubscriptionDialog({
       source: sub?.source ?? 'manual',
       matchKey: sub?.matchKey ?? null,
       category,
+      business: business || undefined,
       isDemo: sub?.isDemo ?? false,
     });
   };
@@ -377,6 +390,21 @@ function SubscriptionDialog({
               ))}
             </select>
           </label>
+        </div>
+
+        <div className="notice" style={{ alignItems: 'center' }}>
+          <Briefcase size={18} aria-hidden="true" />
+          <div className="notice-body">
+            <label className="row spread" style={{ gap: 12, cursor: 'pointer' }}>
+              <span>
+                <span style={{ fontWeight: 600, display: 'block' }}>Bedrift – betalt av eier</span>
+                <span className="small muted">
+                  Holdes utenfor din private abonnementssum og ditt private forbruk. {sub?.matchKey ? 'Alle trekkene fra denne leverandøren markeres også, nå og fremover.' : ''}
+                </span>
+              </span>
+              <input type="checkbox" role="switch" checked={business} onChange={(e) => setBusiness(e.target.checked)} aria-label="Bedrift – betalt av eier" style={{ width: 20, height: 20 }} />
+            </label>
+          </div>
         </div>
 
         {(interval !== 'monthly' || (sub && sub.status === 'active')) && (
