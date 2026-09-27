@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   EMPTY_FILTER,
+  businessBreakdown,
   categoryBreakdown,
   filterTransactions,
   monthlySeries,
@@ -30,6 +31,7 @@ const TYPE_OPTIONS: { value: TxTypeFilter; label: string }[] = [
   { value: 'income', label: 'Inntekter' },
   { value: 'transfer', label: 'Overføringer' },
   { value: 'refund', label: 'Refusjoner' },
+  { value: 'business', label: 'Bedrift' },
 ];
 
 const PAGE_SIZE = 60;
@@ -44,6 +46,7 @@ export function TransactionsPage() {
     accountId: params.get('konto'),
     from: params.get('fra'),
     category: (params.get('kategori') as CategoryId) || null,
+    type: (params.get('type') as TxTypeFilter) || 'all',
   }));
   const [view, setView] = useState<'list' | 'analysis'>(params.get('vis') === 'analyse' ? 'analysis' : 'list');
   const [showFilters, setShowFilters] = useState(false);
@@ -67,6 +70,7 @@ export function TransactionsPage() {
   const [perMonth, setPerMonth] = useState<'total' | 'month'>('total');
   const firstMonth = monthKey(earliest);
   const periodLabel = monthCount === 1 ? formatMonth(lastMonth) : `${formatMonth(firstMonth, true)} – ${formatMonth(lastMonth, true)} (${monthCount} mnd)`;
+  const bizBreakdown = useMemo(() => businessBreakdown(filtered, base, data.rates), [filtered, base, data.rates]);
   const shownBreakdown = perMonth === 'month' ? breakdown.map((b) => ({ ...b, amount: Math.round(b.amount / monthCount) })) : breakdown;
 
   const banks = [...new Set(data.accounts.map((a) => a.bankName))].sort((a, b) => a.localeCompare(b, 'nb'));
@@ -265,6 +269,25 @@ export function TransactionsPage() {
               />
             ) : (
               <Empty icon={<Receipt size={22} />} title="Ingen utgifter i utvalget" />
+            )}
+            {bizBreakdown.shares.length > 0 && (
+              <div className="biz-block">
+                <div className="spread">
+                  <p className="small" style={{ fontWeight: 600 }}>Betalt for bedriften</p>
+                  <Amount value={perMonth === 'month' ? Math.round(bizBreakdown.total / monthCount) : bizBreakdown.total} currency={base} className="small" />
+                </div>
+                <p className="xsmall subtle" style={{ marginBottom: 8 }}>Egen post – ikke med i prosentene eller utgiftene over.</p>
+                <CategoryBars
+                  shares={perMonth === 'month' ? bizBreakdown.shares.map((b) => ({ ...b, amount: Math.round(b.amount / monthCount) })) : bizBreakdown.shares}
+                  currency={base}
+                  labelSuffix=" – Bedrift"
+                  hideShare
+                  onSelect={(c) => {
+                    set({ category: c, type: 'business' });
+                    setView('list');
+                  }}
+                />
+              </div>
             )}
             <p className="xsmall subtle" style={{ marginTop: 12 }}>
               Trykk på en kategori for å se transaksjonene. Refusjoner er trukket fra i kategorien de hører til.

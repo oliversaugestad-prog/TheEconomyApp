@@ -1,10 +1,11 @@
-import { Bell, CalendarClock, Info, PiggyBank, Receipt } from 'lucide-react';
+import { Bell, Briefcase, CalendarClock, Info, PiggyBank, Receipt } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   balanceSummary,
   bookedOrAvailable,
   cardDebt,
+  businessBreakdown,
   categoryBreakdown,
   monthlySeries,
   monthTransactions,
@@ -57,6 +58,7 @@ export function OverviewPage() {
   const remaining = useMemo(() => estimateRemaining(data.accounts, upcoming, base, data.rates), [data.accounts, upcoming, base, data.rates]);
   const recent = useMemo(() => sortByDateDesc(txs).slice(0, 6), [txs]);
   const breakdown = useMemo(() => categoryBreakdown(flows), [flows]);
+  const bizMonth = useMemo(() => businessBreakdown(monthTransactions(txs, month), base, data.rates), [txs, month, base, data.rates]);
   const accById = useMemo(() => new Map(data.accounts.map((a) => [a.id, a])), [data.accounts]);
 
   const notif = data.settings.notifications;
@@ -313,6 +315,24 @@ export function OverviewPage() {
             <CategoryBars shares={breakdown} currency={base} onSelect={(c) => navigate(`/transaksjoner?kategori=${c}&fra=${month}-01`)} />
           ) : (
             <Empty icon={<Receipt size={22} />} title="Ingen utgifter denne måneden" />
+          )}
+          {bizMonth.shares.length > 0 && (
+            <div className="biz-block">
+              <div className="spread">
+                <p className="small" style={{ fontWeight: 600 }}>
+                  <Briefcase size={14} aria-hidden="true" style={{ verticalAlign: -2 }} /> Betalt for bedriften
+                </p>
+                <Amount value={bizMonth.total} currency={base} className="small" />
+              </div>
+              <p className="xsmall subtle" style={{ marginBottom: 8 }}>Egen post – ikke med i prosentene eller utgiftene over.</p>
+              <CategoryBars
+                shares={bizMonth.shares}
+                currency={base}
+                labelSuffix=" – Bedrift"
+                hideShare
+                onSelect={(c) => navigate(`/transaksjoner?type=business&kategori=${c}&fra=${month}-01`)}
+              />
+            </div>
           )}
         </section>
       </div>
