@@ -24,6 +24,9 @@ import { Page } from '../Layout';
 
 type Tab = 'subscription' | 'fixed' | 'suggestions' | 'ended';
 
+/** Kort enhet for trekkintervallet, vist rett etter beløpet. */
+const PER: Record<BillingInterval, string> = { weekly: '/ uke', monthly: '/ mnd', quarterly: '/ kvartal', yearly: '/ år' };
+
 export function SubscriptionsPage() {
   const data = useData();
   const store = useStore();
@@ -69,7 +72,7 @@ export function SubscriptionsPage() {
             <span>{subsTotal.count} aktive</span>
           </div>
           <p className="xsmall" style={{ opacity: 0.85, marginTop: 10 }}>
-            Årsabonnementer er fordelt over 12 måneder. Faktisk trekkdato vises per abonnement.
+            Beløpet er hva abonnementene koster per måned. Årsabonnementer er fordelt over 12 måneder (f.eks. 1 200 kr/år teller 100 kr/mnd). Hvert abonnement viser om det trekkes månedlig eller årlig.
           </p>
         </section>
         <section className="card">
@@ -135,10 +138,13 @@ export function SubscriptionsPage() {
                         )}
                       </span>
                       <span className="li-end">
-                        <Amount value={s.amount} currency={s.currency} />
+                        <span style={{ whiteSpace: 'nowrap' }}>
+                          <Amount value={s.amount} currency={s.currency} />
+                          <span className="small muted"> {PER[s.interval]}</span>
+                        </span>
                         {s.interval !== 'monthly' && (
                           <span className="xsmall subtle" style={{ display: 'block' }}>
-                            ≈ <Amount value={monthlyCost(s)} currency={s.currency} />/mnd
+                            ≈ <Amount value={monthlyCost(s)} currency={s.currency} /> / mnd
                           </span>
                         )}
                       </span>

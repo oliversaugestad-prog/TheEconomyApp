@@ -132,14 +132,29 @@ export function estimateRemaining(
     deducted += c.amount;
   }
 
+  // Kort uten faktura: dagens utestående gjeld brukes som anslag på neste kortregning.
   const cardsWithoutBill = accounts.filter(
     (a) => a.includedInOverview && a.type === 'credit_card' && (!a.card?.statement || a.card.statement.amount === null),
   );
-  if (cardsWithoutBill.length) {
+  const estimated: string[] = [];
+  const unknown: string[] = [];
+  for (const a of cardsWithoutBill) {
+    const debt = a.bookedBalance === null ? null : Math.max(0, -a.bookedBalance);
+    const c = debt === null ? null : convert(debt, a.currency, base, rates);
+    if (!c) {
+      unknown.push(a.name);
+      continue;
+    }
+    if (c.amount > 0) {
+      deductions.push({ id: `card-est-${a.id}`, name: `${a.name} – gjeld nå`, amount: debt!, currency: a.currency, date: '', kind: 'card_bill', accountId: a.id, estimated: true, basis: 'Utestående gjeld brukt som anslag' });
+      deducted += c.amount;
+    }
+    estimated.push(a.name);
+  }
+  if (estimated.length) notes.push(`Faktura er ikke oppgitt for ${estimated.join(', ')}. Dagens utestående gjeld er brukt som anslag på neste kortregning.`);
+  if (unknown.length) {
     complete = false;
-    notes.push(
-      `Faktura er ikke tilgjengelig for ${cardsWithoutBill.map((a) => a.name).join(', ')}. Kommende kortregning er derfor ikke trukket fra.`,
-    );
+    notes.push(`Gjelden er ukjent for ${unknown.join(', ')}. Legg inn utestående gjeld på kortet for å få det med.`);
   }
   notes.push('Abonnementer som belastes kredittkort er ikke trukket separat, siden de kommer på kortfakturaen.');
   notes.push('Datoer for abonnementer er estimert ut fra tidligere trekk og kan avvike.');

@@ -72,7 +72,8 @@ export function balanceSummary(data: Pick<AppData, 'accounts' | 'transactions' |
   // kontoen listes i `bookedSubstituted` slik at det vises tydelig.
   const bookedSubstituted = bankAccounts.filter((a) => a.bookedBalance === null && a.availableBalance !== null);
   const booked = sumMoney(bankAccounts.map((a) => item(a, bookedOrAvailable(a))), base, data.rates);
-  const available = sumMoney(bankAccounts.map((a) => item(a, a.availableBalance)), base, data.rates);
+  // Manuelle kontoer der du bare har oppgitt én saldo: den brukes også som tilgjengelig.
+  const available = sumMoney(bankAccounts.map((a) => item(a, a.availableBalance ?? (a.source === 'manual' ? a.bookedBalance : null))), base, data.rates);
   const debt = sumMoney(cards.map((a) => item(a, cardDebt(a))), base, data.rates);
   const reserved = sumMoney(cards.map((a) => item(a, reservedAmount(a.id, data.transactions))), base, data.rates);
   return {

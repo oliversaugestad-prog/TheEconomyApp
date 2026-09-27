@@ -13,7 +13,7 @@ import {
   type TxTypeFilter,
 } from '../../domain/calculations';
 import { CATEGORIES, CATEGORY_BY_ID } from '../../domain/categories';
-import { formatDate, monthKey } from '../../domain/dates';
+import { formatDate, formatMonth, monthKey } from '../../domain/dates';
 import type { CategoryId, Transaction } from '../../domain/types';
 import { useData, useToday } from '../../state/StoreContext';
 import { CategoryBars } from '../charts/CategoryBars';
@@ -64,6 +64,10 @@ export function TransactionsPage() {
   const earliest = filter.from ?? filtered.reduce<string | null>((m, t) => (!m || t.bookingDate < m ? t.bookingDate : m), null) ?? `${lastMonth}-01`;
   const monthCount = Math.min(12, Math.max(1, (Number(lastMonth.slice(0, 4)) - Number(earliest.slice(0, 4))) * 12 + Number(lastMonth.slice(5, 7)) - Number(earliest.slice(5, 7)) + 1));
   const series = useMemo(() => monthlySeries(filtered, lastMonth, monthCount, base, data.rates), [filtered, lastMonth, monthCount, base, data.rates]);
+  const [perMonth, setPerMonth] = useState<'total' | 'month'>('total');
+  const firstMonth = monthKey(earliest);
+  const periodLabel = monthCount === 1 ? formatMonth(lastMonth) : `${formatMonth(firstMonth, true)} – ${formatMonth(lastMonth, true)} (${monthCount} mnd)`;
+  const shownBreakdown = perMonth === 'month' ? breakdown.map((b) => ({ ...b, amount: Math.round(b.amount / monthCount) })) : breakdown;
 
   const banks = [...new Set(data.accounts.map((a) => a.bankName))].sort((a, b) => a.localeCompare(b, 'nb'));
   const accountOptions = data.accounts.filter((a) => !filter.bank || a.bankName === filter.bank);
@@ -226,16 +230,32 @@ export function TransactionsPage() {
         <div className="grid cols-2">
           <section className="card">
             <div className="card-head">
-              <h2>Utgifter per kategori</h2>
+              <div>
+                <h2>Utgifter per kategori</h2>
+                <p className="xsmall subtle">{perMonth === 'month' ? `Snitt per måned · ${periodLabel}` : `Totalt · ${periodLabel}`}</p>
+              </div>
               {filter.category && (
                 <button type="button" className="btn ghost small" onClick={() => set({ category: null })}>
                   Vis alle
                 </button>
               )}
             </div>
+            {monthCount > 1 && (
+              <div style={{ marginBottom: 12 }}>
+                <Segmented
+                  label="Vis beløp"
+                  value={perMonth}
+                  onChange={setPerMonth}
+                  options={[
+                    { value: 'total', label: 'Totalt i perioden' },
+                    { value: 'month', label: 'Snitt per måned' },
+                  ]}
+                />
+              </div>
+            )}
             {breakdown.length ? (
               <CategoryBars
-                shares={breakdown}
+                shares={shownBreakdown}
                 currency={base}
                 onSelect={(c) => {
                   set({ category: c });

@@ -20,6 +20,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     document.documentElement.dataset.accent = accent;
   }, [accent]);
 
+  // Advar hvis siden lukkes eller lastes på nytt mens banker hentes – da går resultatet tapt.
+  const syncing = snap.syncing.length > 0;
+  useEffect(() => {
+    if (!syncing) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [syncing]);
+
   return (
     <div className="app">
       <a className="skip-link" href="#innhold">
