@@ -163,3 +163,13 @@ describe('classifyTransactions', () => {
     expect(classifyTransactions([t], accounts, [])[0].kind).toBe('internal_transfer');
   });
 });
+
+describe('bedriftsutgifter betalt av eier', () => {
+  it('holdes utenfor private utgifter og markeres via regel for lignende kjøp', () => {
+    const a = tx({ accountId: 'k', amount: -50000, counterparty: 'Lovable Dover' });
+    const b = tx({ accountId: 'k', amount: -30000, counterparty: 'Lovable London' });
+    const res = classifyTransactions([a, b], [account({ id: 'k' })], [{ id: 'r', matchKey: 'lovable', category: 'abonnementer', business: true, createdAt: '' }]);
+    expect(res.map((t) => t.kind)).toEqual(['business', 'business']);
+    expect(summarizeFlows(res, 'NOK', []).expense).toBe(0);
+  });
+});

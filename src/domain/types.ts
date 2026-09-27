@@ -97,7 +97,8 @@ export type TransactionStatus = 'booked' | 'pending';
  *   allerede registrert på kortet)
  * - `refund`: refusjon – reduserer utgiftene i kategorien
  */
-export type TransactionKind = 'normal' | 'internal_transfer' | 'card_payment' | 'refund';
+/** `business`: bedriftens utgift betalt privat av eier – holdes utenfor privat økonomi. */
+export type TransactionKind = 'normal' | 'internal_transfer' | 'card_payment' | 'refund' | 'business';
 
 export type CategoryId =
   | 'bolig'
@@ -174,6 +175,8 @@ export interface CategoryRule {
   /** Normalisert mottaker som regelen gjelder. */
   matchKey: string;
   category: CategoryId;
+  /** Lignende kjøp markeres også som bedriftsutgift betalt av eier. */
+  business?: boolean;
   createdAt: IsoTimestamp;
 }
 

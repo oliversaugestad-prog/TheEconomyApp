@@ -4,12 +4,14 @@ import { useBackend } from '../../backend/session';
 import { BankApiError, callBank } from '../../backend/supabase';
 import { emptyBusiness, normalizeQuoteCurrency, summarizeBusiness, type AssetScope, type HoldingValuation } from '../../domain/business';
 import { formatTimestamp } from '../../domain/dates';
-import { formatMoney, parseAmount } from '../../domain/money';
-import type { BusinessItem, Holding, Quote } from '../../domain/types';
+import { formatMoney, parseAmount, sumMoney } from '../../domain/money';
+import { sortByDateDesc } from '../../domain/calculations';
+import type { BusinessItem, Holding, Quote, Transaction } from '../../domain/types';
 import { newId } from '../../state/store';
 import { useData, useStore } from '../../state/StoreContext';
 import { Amount } from '../components/Amount';
 import { Dialog } from '../components/Dialog';
+import { TransactionDetail, TransactionRow } from '../components/TransactionViews';
 import { Empty, Notice, Segmented } from '../components/common';
 import { Page } from '../Layout';
 
@@ -108,6 +110,13 @@ export function BusinessPage() {
   const [renaming, setRenaming] = useState(false);
 
   const itemsOf = (kind: BusinessItem['kind']) => business.items.filter((i) => i.kind === kind);
+  const paidByOwner = useMemo(() => sortByDateDesc(data.transactions.filter((t) => t.kind === 'business')), [data.transactions]);
+  const paidTotal = useMemo(
+    () => sumMoney(paidByOwner.map((t) => ({ id: t.id, label: t.counterparty, amount: -t.amount, currency: t.currency })), base, data.rates),
+    [paidByOwner, base, data.rates],
+  );
+  const [paidLimit, setPaidLimit] = useState(20);
+  const [openTx, setOpenTx] = useState<Transaction | null>(null);
 
   return (
     <Page
@@ -255,6 +264,47 @@ export function BusinessPage() {
           </section>
         ))}
       </div>
+
+      <section className="card flush" aria-labelledby="biz-paid">
+        <div className="card-head" style={{ padding: '18px 18px 0' }}>
+          <div>
+            <h2 id="biz-paid">Betalt privat for bedriften</h2>
+            <p className="xsmall subtle">Kjøp du har markert som «Bedrift – betalt av eier». De er holdt utenfor ditt private forbruk.</p>
+          </div>
+          {paidByOwner.length > 0 && (
+            <span className="num" style={{ fontWeight: 650 }}>
+              <Amount value={paidTotal.amount} currency={base} />
+            </span>
+          )}
+        </div>
+        {paidByOwner.length ? (
+          <>
+            <ul className="list" style={{ marginTop: 8 }}>
+              {paidByOwner.slice(0, paidLimit).map((t) => (
+                <li key={t.id}>
+                  <TransactionRow t={t} account={data.accounts.find((a) => a.id === t.accountId)} onOpen={setOpenTx} />
+                </li>
+              ))}
+            </ul>
+            {paidByOwner.length > paidLimit && (
+              <div style={{ padding: 12, textAlign: 'center' }}>
+                <button type="button" className="btn small" onClick={() => setPaidLimit((n) => n + 20)}>
+                  Vis flere ({paidByOwner.length - paidLimit} til)
+                </button>
+              </div>
+            )}
+            <p className="xsmall subtle" style={{ padding: '10px 18px 16px' }}>
+              Summen er det bedriften skylder deg i utlegg{!paidTotal.complete ? ' (noen beløp mangler valutakurs)' : ''}. Den er ikke med i bedriftens samlet verdi over.
+            </p>
+          </>
+        ) : (
+          <p className="small muted" style={{ padding: '10px 18px 18px' }}>
+            Åpne en transaksjon og trykk «Bedrift – betalt av eier» for å flytte den hit. Du kan velge at lignende kjøp markeres automatisk.
+          </p>
+        )}
+      </section>
+
+      {openTx && <TransactionDetail key={openTx.id} tx={openTx} onClose={() => setOpenTx(null)} />}
 
       <p className="xsmall subtle">
         Bedriftssiden er manuell og holdes utenfor din private oversikt og ditt private forbruk. Tallene lagres sammen med resten av dataene dine i Saldo.

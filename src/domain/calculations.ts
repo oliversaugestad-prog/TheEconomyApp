@@ -117,7 +117,7 @@ export function bankTotals(accounts: Account[], base: CurrencyCode, rates: Excha
 /* ------------------------------------------------------------------ */
 
 /** Transaksjonstyper som ikke påvirker inntekter eller forbruk. */
-export const NEUTRAL_KINDS: TransactionKind[] = ['internal_transfer', 'card_payment'];
+export const NEUTRAL_KINDS: TransactionKind[] = ['internal_transfer', 'card_payment', 'business'];
 
 export interface Flow {
   income: Minor;

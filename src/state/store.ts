@@ -174,6 +174,30 @@ export class SaldoStore {
     this.update((d) => this.reclassify({ ...d, rules: d.rules.filter((r) => r.id !== ruleId) }));
   }
 
+  /**
+   * Marker (eller fjern markering) som bedriftens utgift betalt privat av eier. Med `remember`
+   * gjelder det også tidligere og fremtidige lignende kjøp (mottakere som starter med `matchKey`).
+   */
+  setBusiness(txId: string, business: boolean, remember: boolean, matchKey?: string) {
+    this.update((d) => {
+      const tx = d.transactions.find((t) => t.id === txId);
+      if (!tx) return d;
+      let rules = d.rules;
+      if (remember) {
+        const key = normalizeCounterparty(matchKey ?? '') || suggestRuleKey(tx.counterparty);
+        const existing = rules.find((r) => r.matchKey === key);
+        rules = [
+          ...rules.filter((r) => r.matchKey !== key),
+          { ...(existing ?? { id: newId('rule'), category: tx.category, createdAt: this.clock().toISOString() }), matchKey: key, business: business || undefined },
+        ];
+      }
+      const transactions = d.transactions.map((t) =>
+        t.id === txId ? { ...t, kind: business ? ('business' as const) : ('normal' as const), userKind: true, linkedTransactionId: null } : t,
+      );
+      return this.reclassify({ ...d, rules, transactions });
+    });
+  }
+
   setKind(txId: string, kind: TransactionKind) {
     this.update((d) => {
       const tx = d.transactions.find((t) => t.id === txId);

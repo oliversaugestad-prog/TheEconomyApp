@@ -298,3 +298,18 @@ describe('Kategorier i oversikten', () => {
     expect(screen.getAllByText(label).length).toBeGreaterThan(0);
   });
 });
+
+describe('Bedrift – betalt av eier', () => {
+  it('flytter et kjøp ut av privat forbruk og viser det under Bedrift', async () => {
+    const { user, store } = setup('/transaksjoner');
+    await user.type(screen.getByLabelText('Søk i transaksjoner'), 'Foodora');
+    const list = screen.getByRole('region', { name: 'Transaksjonsliste' });
+    await user.click(within(list).getAllByRole('button')[0]);
+    const dialog = screen.getByRole('dialog', { name: 'Transaksjon' });
+    await user.click(within(dialog).getByRole('button', { name: /Bedrift – betalt av eier/ }));
+    const foodora = store.data.transactions.filter((t) => t.counterparty.toLowerCase().includes('foodora'));
+    // «Husk for lignende kjøp» er på: alle Foodora-kjøp markeres
+    expect(foodora.every((t) => t.amount >= 0 || t.kind === 'business')).toBe(true);
+    expect(store.data.rules.some((r) => r.business)).toBe(true);
+  });
+});

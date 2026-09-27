@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CreditCard, RotateCcw, Undo2 } from 'lucide-react';
+import { ArrowLeftRight, Briefcase, CreditCard, RotateCcw, Undo2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CATEGORIES, CATEGORY_BY_ID, normalizeCounterparty, ruleMatches, suggestRuleKey, findRule } from '../../domain/categories';
@@ -14,20 +14,22 @@ export const KIND_LABEL: Record<TransactionKind, string> = {
   internal_transfer: 'Overføring mellom egne kontoer',
   card_payment: 'Betaling av kredittkort',
   refund: 'Refusjon',
+  business: 'Bedrift – betalt av eier',
 };
 
 function KindBadge({ t }: { t: Transaction }) {
   if (t.kind === 'internal_transfer') return <span className="badge">Overføring</span>;
   if (t.kind === 'card_payment') return <span className="badge">Kortbetaling</span>;
   if (t.kind === 'refund') return <span className="badge accent">Refusjon</span>;
+  if (t.kind === 'business') return <span className="badge">Bedrift</span>;
   return null;
 }
 
 export function TransactionRow({ t, account, onOpen, showAccount = true }: { t: Transaction; account?: Account; onOpen: (t: Transaction) => void; showAccount?: boolean }) {
   const today = useToday();
   const cat = CATEGORY_BY_ID[t.category];
-  const neutral = t.kind === 'internal_transfer' || t.kind === 'card_payment';
-  const Icon = t.kind === 'card_payment' ? CreditCard : t.kind === 'internal_transfer' ? ArrowLeftRight : t.kind === 'refund' ? Undo2 : null;
+  const neutral = t.kind === 'internal_transfer' || t.kind === 'card_payment' || t.kind === 'business';
+  const Icon = t.kind === 'card_payment' ? CreditCard : t.kind === 'internal_transfer' ? ArrowLeftRight : t.kind === 'refund' ? Undo2 : t.kind === 'business' ? Briefcase : null;
   return (
     <button type="button" className="list-item" onClick={() => onOpen(t)}>
       <span className="avatar" aria-hidden="true" style={{ color: Icon ? 'var(--text-2)' : cat.color, background: 'var(--surface-2)' }}>
@@ -63,6 +65,8 @@ function effectText(t: Transaction): string {
       return 'Reduserer kredittkortgjelden, men telles ikke som ny utgift. Kjøpene er allerede registrert på kortet.';
     case 'refund':
       return `Reduserer utgiftene i kategorien ${CATEGORY_BY_ID[t.category].label}. Telles ikke som inntekt.`;
+    case 'business':
+      return 'Bedriftens utgift som du har betalt privat. Holdes utenfor ditt private forbruk og vises som egen post under Bedrift (utlegg bedriften skylder deg).';
     default:
       return t.amount >= 0 ? `Telles som inntekt (${CATEGORY_BY_ID[t.category].label}).` : `Telles som utgift i kategorien ${CATEGORY_BY_ID[t.category].label}.`;
   }
@@ -173,11 +177,43 @@ export function TransactionDetail({ tx, onClose }: { tx: Transaction | null; onC
           </div>
         )}
 
+        {t.amount < 0 && (t.kind === 'normal' || t.kind === 'business') && (
+          <div className="notice" style={{ alignItems: 'center' }}>
+            <Briefcase size={18} aria-hidden="true" />
+            <div className="notice-body">
+              <p style={{ fontWeight: 600 }}>{t.kind === 'business' ? 'Markert som bedriftsutgift' : 'Var dette for bedriften?'}</p>
+              <p className="small muted">
+                {t.kind === 'business'
+                  ? 'Holdes utenfor ditt private forbruk og vises under Bedrift som utlegg bedriften skylder deg.'
+                  : 'Marker kjøpet som betalt av deg for bedriften, så telles det ikke i din private økonomi.'}
+              </p>
+              <button
+                type="button"
+                className={`btn small ${t.kind === 'business' ? 'ghost' : 'primary'}`}
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  const on = t.kind !== 'business';
+                  store.setBusiness(t.id, on, remember, effectiveKey);
+                  setSaved(
+                    on
+                      ? remember
+                        ? `Markert som bedrift. Gjelder også ${similar} transaksjon(er) fra «${effectiveKey}» og fremtidige lignende kjøp.`
+                        : 'Markert som bedrift – betalt av eier.'
+                      : 'Fjernet markeringen. Telles igjen i din private økonomi.',
+                  );
+                }}
+              >
+                <Briefcase size={16} aria-hidden="true" /> {t.kind === 'business' ? 'Ikke bedrift likevel' : 'Bedrift – betalt av eier'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <label className="field">
           <span>Behandle som</span>
           <select className="select" value={t.kind} onChange={(e) => store.setKind(t.id, e.target.value as TransactionKind)}>
             {(Object.keys(KIND_LABEL) as TransactionKind[])
-              .filter((k) => k !== 'refund' || t.amount > 0)
+              .filter((k) => (k !== 'refund' || t.amount > 0) && (k !== 'business' || t.amount < 0))
               .map((k) => (
                 <option key={k} value={k}>
                   {KIND_LABEL[k]}
