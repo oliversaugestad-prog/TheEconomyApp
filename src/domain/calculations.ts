@@ -235,11 +235,32 @@ export function categoryBreakdown(summary: FlowSummary): CategoryShare[] {
     .sort((a, b) => b.amount - a.amount || CATEGORIES.findIndex((c) => c.id === a.category) - CATEGORIES.findIndex((c) => c.id === b.category));
 }
 
+/**
+ * Bedriftens utgifter betalt av eier, per kategori – egen post som ikke inngår i
+ * private utgifter eller prosentfordelingen.
+ */
+export function businessBreakdown(transactions: Transaction[], base: CurrencyCode, rates: ExchangeRate[]): { shares: CategoryShare[]; total: Minor; skipped: number } {
+  const by = new Map<CategoryId, Minor>();
+  let skipped = 0;
+  for (const t of transactions) {
+    if (t.kind !== 'business' || t.amount >= 0) continue;
+    const c = convert(-t.amount, t.currency, base, rates);
+    if (!c) {
+      skipped += 1;
+      continue;
+    }
+    by.set(t.category, (by.get(t.category) ?? 0) + c.amount);
+  }
+  const total = [...by.values()].reduce((s, v) => s + v, 0);
+  const shares = [...by.entries()].map(([category, amount]) => ({ category, amount, share: total ? amount / total : 0 })).sort((a, b) => b.amount - a.amount);
+  return { shares, total, skipped };
+}
+
 /* ------------------------------------------------------------------ */
 /* Filtrering                                                          */
 /* ------------------------------------------------------------------ */
 
-export type TxTypeFilter = 'all' | 'income' | 'expense' | 'transfer' | 'refund';
+export type TxTypeFilter = 'all' | 'income' | 'expense' | 'transfer' | 'refund' | 'business';
 export type TxStatusFilter = 'all' | 'booked' | 'pending';
 
 export interface TransactionFilter {
@@ -296,7 +317,10 @@ export function filterTransactions(transactions: Transaction[], accounts: Accoun
         if (!(t.kind === 'normal' && t.amount < 0)) return false;
         break;
       case 'transfer':
-        if (!NEUTRAL_KINDS.includes(t.kind)) return false;
+        if (t.kind !== 'internal_transfer' && t.kind !== 'card_payment') return false;
+        break;
+      case 'business':
+        if (t.kind !== 'business') return false;
         break;
       case 'refund':
         if (t.kind !== 'refund') return false;

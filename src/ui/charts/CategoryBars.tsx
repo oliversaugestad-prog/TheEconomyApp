@@ -13,12 +13,17 @@ export function CategoryBars({
   limit,
   onSelect,
   selected,
+  labelSuffix = '',
+  hideShare = false,
 }: {
   shares: CategoryShare[];
   currency: string;
   limit?: number;
   onSelect?: (c: CategoryId) => void;
   selected?: CategoryId | null;
+  /** F.eks. « – Bedrift» for egne poster utenfor den private fordelingen. */
+  labelSuffix?: string;
+  hideShare?: boolean;
 }) {
   const list = limit ? shares.slice(0, limit) : shares;
   const rest = limit ? shares.slice(limit) : [];
@@ -33,8 +38,9 @@ export function CategoryBars({
           <span className="dot" style={{ background: info.color }} aria-hidden="true" />
           <span className="small" style={{ fontWeight: 550 }}>
             {info.label}
+            {labelSuffix}
           </span>
-          <span className="xsmall subtle">{Math.round(s.share * 100)} %</span>
+          {!hideShare && <span className="xsmall subtle">{Math.round(s.share * 100)} %</span>}
         </span>
         <Amount value={s.amount} currency={currency} className="small" />
         <span className="cat-track" aria-hidden="true">

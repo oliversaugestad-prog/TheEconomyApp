@@ -349,3 +349,20 @@ describe('Abonnement som bedrift', () => {
     expect(before).toBeGreaterThan(0);
   });
 });
+
+describe('Bedrift som egen post i oversikten', () => {
+  it('viser «Abonnementer – Bedrift» separat og holder det utenfor prosentene', async () => {
+    const { user, store } = setup('/');
+    const card = () => screen.getByRole('heading', { name: /Utgifter per kategori/ }).closest('section')!;
+    act(() => {
+      const netflix = store.data.subscriptions.find((s) => s.matchKey === 'netflix')!;
+      store.upsertSubscription({ ...netflix, business: true });
+    });
+    expect(within(card()).getByText(/Betalt for bedriften/)).toBeInTheDocument();
+    const bizRow = within(card()).getByRole('button', { name: /Abonnementer – Bedrift/ });
+    expect(bizRow.textContent).not.toMatch(/%/);
+    await user.click(bizRow);
+    expect(screen.getByRole('region', { name: 'Transaksjonsliste' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bedrift', pressed: true })).toBeInTheDocument();
+  });
+});
