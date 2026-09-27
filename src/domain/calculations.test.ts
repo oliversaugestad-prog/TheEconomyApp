@@ -32,12 +32,19 @@ describe('balanceSummary', () => {
     expect(s.bankAccounts.map((a) => a.id)).not.toContain('ex');
   });
 
-  it('tilgjengelig saldo tas som oppgitt og er ufullstendig når en konto mangler tallet', () => {
-    const s = balanceSummary(data);
+  it('tilgjengelig saldo tas som oppgitt og er ufullstendig når en bankkonto mangler tallet', () => {
+    const bankBsu = { ...bsu, source: 'bank' as const };
+    const s = balanceSummary({ ...data, accounts: [bruk, eur, bankBsu, card, excluded] });
     // Ingen reservasjoner trekkes fra på nytt
     expect(s.available.amount).toBe(968_760 + 115_000);
     expect(s.available.complete).toBe(false);
     expect(s.available.missing.map((m) => m.id)).toEqual(['bsu']);
+  });
+
+  it('manuell konto med bare én saldo bruker den også som tilgjengelig', () => {
+    const s = balanceSummary(data);
+    expect(s.available.amount).toBe(968_760 + 115_000 + 5_000_000);
+    expect(s.available.complete).toBe(true);
   });
 
   it('beregner kortgjeld, reservasjoner og netto separat', () => {

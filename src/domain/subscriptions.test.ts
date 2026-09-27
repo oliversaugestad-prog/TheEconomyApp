@@ -118,11 +118,19 @@ describe('kommende betalinger og estimert igjen', () => {
     expect(est.complete).toBe(true);
   });
 
-  it('er ufullstendig når kortfaktura mangler', () => {
+  it('bruker gjeld nå som anslag når kortfaktura mangler', () => {
     const noBill = { ...card, card: { ...card.card!, statement: null } };
     const est = estimateRemaining([bruk, noBill], upcomingPayments(subs, [bruk, noBill], '2026-09-26'), 'NOK', []);
+    expect(est.complete).toBe(true);
+    expect(est.remaining).toBe(2_000_000 - 500_000 - 1_450_000);
+    expect(est.notes.join(' ')).toMatch(/brukt som anslag/);
+  });
+
+  it('er ufullstendig når både faktura og gjeld er ukjent', () => {
+    const unknown = { ...card, bookedBalance: null, card: { ...card.card!, statement: null } };
+    const est = estimateRemaining([bruk, unknown], upcomingPayments(subs, [bruk, unknown], '2026-09-26'), 'NOK', []);
     expect(est.complete).toBe(false);
-    expect(est.notes.join(' ')).toMatch(/Faktura er ikke tilgjengelig/);
+    expect(est.notes.join(' ')).toMatch(/Gjelden er ukjent/);
   });
 });
 

@@ -385,10 +385,9 @@ async function handleAction(req: Request): Promise<Response> {
     const fromParam = typeof body.dateFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.dateFrom) ? body.dateFrom : null;
     const dateFrom = fromParam && fromParam > defaultFrom.toISOString().slice(0, 10) ? fromParam : defaultFrom.toISOString().slice(0, 10);
 
-    const results: unknown[] = [];
     let reauth = false;
-    for (const acc of s.accounts as { uid: string }[]) {
-      if (!acc?.uid) continue;
+    // Kontoene hentes samtidig (i små grupper), slik at banker med mange kontoer svarer raskt.
+    const fetchAccount = async (acc: { uid: string }): Promise<unknown> => {
       try {
         const balances = await eb<{ balances: unknown[] }>(`/accounts/${encodeURIComponent(acc.uid)}/balances`, {}, psu);
         const transactions: unknown[] = [];
@@ -405,12 +404,17 @@ async function handleAction(req: Request): Promise<Response> {
           continuation = res.continuation_key ?? undefined;
           if (!continuation) break;
         }
-        results.push({ account: acc, balances: balances.balances ?? [], transactions, error: null });
+        return { account: acc, balances: balances.balances ?? [], transactions, error: null };
       } catch (e) {
         if (e instanceof EbError && (e.status === 401 || e.status === 403)) reauth = true;
-        results.push({ account: acc, balances: [], transactions: [], error: e instanceof EbError ? ebMessage(e) : 'Ukjent feil' });
         console.error('sync-feil for konto', e instanceof EbError ? e.status : 'intern');
+        return { account: acc, balances: [], transactions: [], error: e instanceof EbError ? ebMessage(e) : 'Ukjent feil' };
       }
+    };
+    const list = (s.accounts as { uid: string }[]).filter((a) => a?.uid);
+    const results: unknown[] = [];
+    for (let i = 0; i < list.length; i += 4) {
+      results.push(...(await Promise.all(list.slice(i, i + 4).map(fetchAccount))));
     }
     const nowIso = new Date().toISOString();
     const failed = results.filter((r) => (r as { error: string | null }).error).length;

@@ -83,6 +83,21 @@ export function OverviewPage() {
     }
     return out;
   }, [notif, upcoming, today, data.subscriptions, data.transactions, txs]);
+  // Konkrete poster som gjør summene ufullstendige, med snarvei til å rette dem.
+  const missingValues = useMemo(() => {
+    const out: { id: string; text: string; to: string; action: string }[] = [];
+    const rateOk = (c: string) => c === base || data.rates.some((r) => r.currency === c && r.base === base);
+    for (const a of data.accounts.filter((x) => x.includedInOverview)) {
+      if (a.type === 'credit_card' && a.bookedBalance === null) {
+        out.push({ id: a.id, text: `${a.name} (${a.bankName}): utestående gjeld er ikke oppgitt.`, to: `/kort/${a.id}?rediger=1`, action: 'Legg inn gjeld' });
+      } else if (a.type !== 'credit_card' && a.bookedBalance === null && a.availableBalance === null) {
+        out.push({ id: a.id, text: `${a.name} (${a.bankName}): saldo er ukjent.`, to: `/kontoer/${a.id}`, action: 'Oppdater saldo' });
+      } else if (!rateOk(a.currency)) {
+        out.push({ id: a.id, text: `${a.name}: valutakurs for ${a.currency} mangler.`, to: `/kontoer/${a.id}`, action: 'Se kontoen' });
+      }
+    }
+    return out;
+  }, [data.accounts, data.rates, base]);
   const lastSync = data.connections
     .filter((c) => c.lastSuccessfulSync && c.status !== 'disconnected')
     .map((c) => c.lastSuccessfulSync!)
@@ -125,6 +140,19 @@ export function OverviewPage() {
           <Link to="/kontoer">Gå til kontoer</Link>
         </Notice>
       ))}
+
+      {missingValues.length > 0 && (
+        <Notice tone="warn" title="Hvorfor noen tall er merket «Ufullstendig»">
+          Disse beløpene er ukjente, og regnes ikke som 0:
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            {missingValues.map((m) => (
+              <li key={m.id}>
+                {m.text} <Link to={m.to}>{m.action}</Link>
+              </li>
+            ))}
+          </ul>
+        </Notice>
+      )}
 
       {alerts.length > 0 && (
         <section className="card" aria-labelledby="alerts-h">
@@ -445,7 +473,7 @@ export function OverviewPage() {
                   −
                 </span>
                 <span>
-                  {d.name} <span className="xsmall subtle">({formatDate(d.date, 'short')}, {d.estimated ? 'estimert' : 'oppgitt'})</span>
+                  {d.name} <span className="xsmall subtle">({d.date ? `${formatDate(d.date, 'short')}, ` : ''}{d.estimated ? 'estimert' : 'oppgitt'})</span>
                 </span>
                 <Amount value={d.amount} currency={d.currency} />
               </div>

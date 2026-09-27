@@ -1,6 +1,6 @@
 import { CreditCard, FileUp, Pencil, Plus, Receipt } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { availableCredit, cardDebt, reservedAmount, sortByDateDesc } from '../../domain/calculations';
 import { formatDate, formatMonth, monthKey } from '../../domain/dates';
 import { formatMoney, parseAmount, sumMoney } from '../../domain/money';
@@ -205,7 +205,11 @@ export function CardDetailPage() {
   const card = data.accounts.find((a) => a.id === id && a.type === 'credit_card');
   const [openTx, setOpenTx] = useState<Transaction | null>(null);
   const [editStatement, setEditStatement] = useState(false);
-  const [editingCard, setEditingCard] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const [editingCard, setEditingCard] = useState(params.get('rediger') === '1');
+  useEffect(() => {
+    if (params.get('rediger') === '1') setParams({}, { replace: true });
+  }, [params, setParams]);
   const navigate = useNavigate();
   const txs = useMemo(() => (card ? sortByDateDesc(data.transactions.filter((t) => t.accountId === card.id)) : []), [data.transactions, card]);
 
