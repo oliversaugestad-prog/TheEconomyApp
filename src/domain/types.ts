@@ -170,6 +170,8 @@ export interface Subscription {
   /** Normalisert mottakernavn som knytter abonnementet til transaksjoner. */
   matchKey: string | null;
   category: CategoryId;
+  /** Bedriftens abonnement betalt privat av eier – holdes utenfor private summer. */
+  business?: boolean;
   isDemo: boolean;
 }
 

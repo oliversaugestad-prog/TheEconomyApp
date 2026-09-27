@@ -395,11 +395,18 @@ export class SaldoStore {
 
   upsertSubscription(sub: Subscription) {
     this.update((d) => {
-      const exists = d.subscriptions.some((s) => s.id === sub.id);
-      return {
-        ...d,
-        subscriptions: exists ? d.subscriptions.map((s) => (s.id === sub.id ? sub : s)) : [...d.subscriptions, sub],
-      };
+      const prev = d.subscriptions.find((s) => s.id === sub.id);
+      const subscriptions = prev ? d.subscriptions.map((s) => (s.id === sub.id ? sub : s)) : [...d.subscriptions, sub];
+      // «Bedrift – betalt av eier» på abonnementet gjelder også alle trekkene (nå og senere).
+      if (sub.matchKey && !!prev?.business !== !!sub.business) {
+        const existing = d.rules.find((r) => r.matchKey === sub.matchKey);
+        const rules = [
+          ...d.rules.filter((r) => r.matchKey !== sub.matchKey),
+          { ...(existing ?? { id: newId('rule'), category: sub.category, createdAt: this.clock().toISOString() }), matchKey: sub.matchKey, business: sub.business || undefined },
+        ];
+        return this.reclassify({ ...d, subscriptions, rules });
+      }
+      return { ...d, subscriptions };
     });
   }
 

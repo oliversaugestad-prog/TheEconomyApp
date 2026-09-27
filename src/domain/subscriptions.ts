@@ -96,8 +96,20 @@ export interface SubscriptionTotals {
   count: number;
 }
 
-export function subscriptionTotals(subs: Subscription[], base: CurrencyCode, rates: ExchangeRate[], kind: Subscription['kind'] | 'all' = 'subscription'): SubscriptionTotals {
-  const active = subs.filter((s) => s.status === 'active' && (kind === 'all' || s.kind === kind));
+/**
+ * Sum av aktive abonnementer. `scope` skiller private abonnementer fra bedriftens
+ * abonnementer som eier betaler privat (standard: bare private).
+ */
+export function subscriptionTotals(
+  subs: Subscription[],
+  base: CurrencyCode,
+  rates: ExchangeRate[],
+  kind: Subscription['kind'] | 'all' = 'subscription',
+  scope: 'private' | 'business' | 'all' = 'private',
+): SubscriptionTotals {
+  const active = subs.filter(
+    (s) => s.status === 'active' && (kind === 'all' || s.kind === kind) && (scope === 'all' || (scope === 'business') === !!s.business),
+  );
   return {
     monthly: sumMoney(
       active.map((s) => ({
@@ -156,7 +168,7 @@ export function subscriptionKey(counterparty: string): string {
 export function chargesFor(sub: Pick<Subscription, 'matchKey'>, transactions: Transaction[]): Transaction[] {
   if (!sub.matchKey) return [];
   return transactions
-    .filter((t) => t.amount < 0 && t.kind === 'normal' && (subscriptionKey(t.counterparty) === sub.matchKey || normalizeCounterparty(t.counterparty) === sub.matchKey))
+    .filter((t) => t.amount < 0 && (t.kind === 'normal' || t.kind === 'business') && (subscriptionKey(t.counterparty) === sub.matchKey || normalizeCounterparty(t.counterparty) === sub.matchKey))
     .sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
 }
 

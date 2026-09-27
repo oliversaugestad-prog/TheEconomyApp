@@ -1,11 +1,13 @@
 import { Briefcase, Building2, Landmark, Loader2, Pencil, Plus, RefreshCw, Search, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useBackend } from '../../backend/session';
 import { BankApiError, callBank } from '../../backend/supabase';
 import { emptyBusiness, normalizeQuoteCurrency, summarizeBusiness, type AssetScope, type HoldingValuation } from '../../domain/business';
 import { formatTimestamp } from '../../domain/dates';
 import { formatMoney, parseAmount, sumMoney } from '../../domain/money';
 import { sortByDateDesc } from '../../domain/calculations';
+import { subscriptionTotals } from '../../domain/subscriptions';
 import type { BusinessItem, Holding, Quote, Transaction } from '../../domain/types';
 import { newId } from '../../state/store';
 import { useData, useStore } from '../../state/StoreContext';
@@ -115,6 +117,7 @@ export function BusinessPage() {
     () => sumMoney(paidByOwner.map((t) => ({ id: t.id, label: t.counterparty, amount: -t.amount, currency: t.currency })), base, data.rates),
     [paidByOwner, base, data.rates],
   );
+  const bizSubs = useMemo(() => subscriptionTotals(data.subscriptions, base, data.rates, 'all', 'business'), [data.subscriptions, base, data.rates]);
   const [paidLimit, setPaidLimit] = useState(20);
   const [openTx, setOpenTx] = useState<Transaction | null>(null);
 
@@ -270,6 +273,12 @@ export function BusinessPage() {
           <div>
             <h2 id="biz-paid">Betalt privat for bedriften</h2>
             <p className="xsmall subtle">Kjøp du har markert som «Bedrift – betalt av eier». De er holdt utenfor ditt private forbruk.</p>
+            {bizSubs.count > 0 && (
+              <p className="small" style={{ marginTop: 4 }}>
+                Faste abonnementer for bedriften: <Amount value={bizSubs.monthly.amount} currency={base} /> / mnd ({bizSubs.count} stk).{' '}
+                <Link to="/abonnementer">Se abonnementer</Link>
+              </p>
+            )}
           </div>
           {paidByOwner.length > 0 && (
             <span className="num" style={{ fontWeight: 650 }}>

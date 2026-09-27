@@ -329,3 +329,23 @@ describe('Abonnement hver N. måned', () => {
     expect(store.data.subscriptions.find((s) => s.name === 'Tannlegeforsikring')).toMatchObject({ interval: 'months', everyMonths: 4, amount: 40_000 });
   });
 });
+
+describe('Abonnement som bedrift', () => {
+  it('flytter abonnementet og trekkene ut av private summer', async () => {
+    const { user, store } = setup('/abonnementer');
+    await user.click(screen.getByRole('button', { name: 'Abonnementer' }));
+    const netflix = store.data.subscriptions.find((s) => s.matchKey === 'netflix')!;
+    const before = store.data.subscriptions.filter((s) => s.status === 'active' && s.kind === 'subscription').length;
+    await user.click(screen.getByRole('button', { name: /Netflix/ }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('switch', { name: 'Bedrift – betalt av eier' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+    expect(store.data.subscriptions.find((s) => s.id === netflix.id)?.business).toBe(true);
+    // Alle Netflix-trekk er nå bedriftsutgifter
+    const charges = store.data.transactions.filter((t) => t.amount < 0 && /netflix/i.test(t.counterparty));
+    expect(charges.length).toBeGreaterThan(0);
+    expect(charges.every((t) => t.kind === 'business')).toBe(true);
+    expect(screen.getByText(/Bedriftens abonnementer/)).toBeInTheDocument();
+    expect(before).toBeGreaterThan(0);
+  });
+});
