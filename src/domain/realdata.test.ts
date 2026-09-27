@@ -23,6 +23,10 @@ describe('ekte banktekster', () => {
     expect(guessCategory('END. CLOTHING NEWCASTLE UPON', '', -100)).toBe('shopping');
     expect(guessCategory('Lnr: 001-093-0519-08', '', -100)).toBe('lan');
     expect(guessCategory('LOVABLE DOVER', '', -100)).toBe('abonnementer');
+    expect(guessCategory('Den norske legeforening', '', -42500)).toBe('medlemskap');
+    expect(guessCategory('HTTPS://WWW.ANSA.NO/', '', -20000)).toBe('medlemskap');
+    expect(guessCategory('FORENINGEN STUDENT', '', -5000)).toBe('medlemskap');
+    expect(normalizeCounterparty('HTTPS://WWW.ANSA.NO/')).toBe('ansa');
     expect(guessCategory('FLY.IO SAN FRANCISCO', '', -100)).toBe('abonnementer');
     expect(guessCategory('Sub Bod As - A', '', -100)).toBe('restaurant');
     expect(guessCategory('APPLE.COM/BILL', '', -2500)).toBe('abonnementer');

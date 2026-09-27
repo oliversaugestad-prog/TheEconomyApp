@@ -22,6 +22,7 @@ export const CATEGORIES: CategoryInfo[] = [
   { id: 'abonnementer', label: 'Abonnementer', color: '#9085e9', type: 'expense' },
   { id: 'restaurant', label: 'Mat ute', color: '#e66767', type: 'expense' },
   { id: 'lan', label: 'Lån og renter', color: '#b8860b', type: 'expense' },
+  { id: 'medlemskap', label: 'Medlemskap og kontingenter', color: '#4fb3bf', type: 'expense' },
   { id: 'annet', label: 'Annet', color: '#6b7280', type: 'expense' },
   { id: 'lonn', label: 'Lønn', color: '#3987e5', type: 'income' },
   { id: 'annen_inntekt', label: 'Annen inntekt', color: '#199e70', type: 'income' },
@@ -50,6 +51,7 @@ export function cleanCounterparty(name: string): string {
 export function normalizeCounterparty(name: string): string {
   return cleanCounterparty(name)
     .toLowerCase()
+    .replace(/^(https?:\/\/)?(www\.)?/, '')
     .replace(/\*.*$/, '') // «NETFLIX.COM*1234» → «netflix.com»
     .replace(/\b(as|asa|ab|aps|a s|ltd|inc|no|com|dk|www)\b/g, ' ')
     .replace(/\d{3,}/g, ' ')
@@ -63,7 +65,8 @@ const KEYWORDS: Array<[RegExp, CategoryId]> = [
   [/(lønn|lonn|løn|lønoverførsel|lønnsoverføring|dedicare)/, 'lonn'],
   [/\b(rema|kiwi|coop|coop365|extra|meny|spar|joker|bunnpris|oda|lidl|netto|føtex|fotex|foetex|bilka|ica|irma|fakta|aldi|7 eleven|7-eleven|narvesen|matkroken|dagligvare|dagligvarer|superbrugsen|lovbjerg|løvbjerg)\b/, 'dagligvarer'],
   [/\b(ruter|ruterappen|vy|atb|skyss|kolumbus|entur|flytoget|flybussen|rejsekort|dsb|circle k|uno x|esso|shell|bolt|uber|ryde|voi|tier|lime|easypark|apcoa|parkering|parking|sas|norwegian|widerøe|wideroe|fylkeskomm)\b|flysas|ryanair|airline|easyjet|klm|lufthansa/, 'transport'],
-  [/(netflix|spotify|hbo|viaplay|disney|icloud|storytel|audible|youtube|tidal|aftenposten|adobe|puregym|eesy|anthropic|openai|plan fee|domene|lovable|fly\.io|github|vercel|legeforening|kontingent)|\b(max|apple(?! pay)|google(?! pay))\b/, 'abonnementer'],
+  [/(netflix|spotify|hbo|viaplay|disney|icloud|storytel|audible|youtube|tidal|aftenposten|adobe|puregym|eesy|anthropic|openai|plan fee|domene|lovable|fly\.io|github|vercel)|\b(max|apple(?! pay)|google(?! pay))\b/, 'abonnementer'],
+  [/(legeforening|kontingent|medlemskap|medlemsavgift|fagforening|studentforening|\bforeningen\b|\bansa\b|akademikerne|tekna)/, 'medlemskap'],
   [/^(lnr|lånenr|lånenummer)\b|\b(avdrag|terminbeløp|lånekassen|renter lån)\b/, 'lan'],
   [/\b(husleie|eiendom|fjordkraft|tibber|elvia|strøm|borettslag|fellesutgifter)\b/, 'bolig'],
   [/\b(apotek|apotek 1|vitus|legevakt|lege|tannlege|boots|matas)\b/, 'helse'],
