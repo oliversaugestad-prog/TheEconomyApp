@@ -245,14 +245,17 @@ export function classifyTransactions(
 
   const txs = transactions.map((t) => {
     let next = t;
+    const rule = findRule(rules, t.counterparty);
     if (!t.userCategorized) {
-      const cat = findRule(rules, t.counterparty)?.category ?? guessCategory(t.counterparty, t.description, t.amount, t.mcc);
+      const cat = rule?.category ?? guessCategory(t.counterparty, t.description, t.amount, t.mcc);
       if (cat !== t.category) next = { ...next, category: cat };
     }
     if (!t.userKind && t.kind !== 'normal') {
       // Automatisk klassifisering beregnes på nytt for å være konsistent.
       next = { ...next, kind: 'normal', linkedTransactionId: null };
     }
+    // Regel: lignende kjøp er bedriftens utgifter betalt av eier.
+    if (!t.userKind && rule?.business && t.amount < 0) next = { ...next, kind: 'business', linkedTransactionId: null };
     return next;
   });
 
