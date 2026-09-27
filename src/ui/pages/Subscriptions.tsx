@@ -5,6 +5,9 @@ import { formatDate, relativeDay } from '../../domain/dates';
 import { formatMoney, parseAmount } from '../../domain/money';
 import {
   INTERVAL_LABEL,
+  intervalText,
+  perText,
+  yearlyCost,
   chargesFor,
   detectPriceChange,
   detectSubscriptions,
@@ -23,9 +26,6 @@ import { IncompleteMark } from '../components/SumBreakdown';
 import { Page } from '../Layout';
 
 type Tab = 'subscription' | 'fixed' | 'suggestions' | 'ended';
-
-/** Kort enhet for trekkintervallet, vist rett etter beløpet. */
-const PER: Record<BillingInterval, string> = { weekly: '/ uke', monthly: '/ mnd', quarterly: '/ kvartal', yearly: '/ år' };
 
 export function SubscriptionsPage() {
   const data = useData();
@@ -127,7 +127,7 @@ export function SubscriptionsPage() {
                           {s.isDemo && <DemoBadge />}
                         </span>
                         <span className="li-sub" style={{ display: 'block' }}>
-                          {INTERVAL_LABEL[s.interval]}
+                          {intervalText(s)}
                           {acc ? ` · ${acc.name}` : ''}
                           {s.status === 'active' ? ` · neste ca. ${relativeDay(next, today)} (estimert)` : s.endedAt ? ` · avsluttet ${formatDate(s.endedAt, 'short')}` : ''}
                         </span>
@@ -140,7 +140,7 @@ export function SubscriptionsPage() {
                       <span className="li-end">
                         <span style={{ whiteSpace: 'nowrap' }}>
                           <Amount value={s.amount} currency={s.currency} />
-                          <span className="small muted"> {PER[s.interval]}</span>
+                          <span className="small muted"> {perText(s)}</span>
                         </span>
                         {s.interval !== 'monthly' && (
                           <span className="xsmall subtle" style={{ display: 'block' }}>
@@ -211,7 +211,7 @@ function Suggestions({ suggestions }: { suggestions: SubscriptionSuggestion[] })
               <span className={`badge ${s.confidence >= 0.8 ? 'accent' : ''}`}>{s.confidence >= 0.8 ? 'Sannsynlig' : 'Mulig'}</span>
             </div>
             <p className="num" style={{ fontSize: '1.3rem', fontWeight: 650 }}>
-              <Amount value={s.amount} currency={s.currency} /> <span className="small muted">/ {INTERVAL_LABEL[s.interval].toLowerCase()}</span>
+              <Amount value={s.amount} currency={s.currency} /> <span className="small muted">{perText(s)}</span>
             </p>
             <p className="small muted">
               {s.occurrences} trekk · sist {formatDate(s.anchorDate, 'short')} · {accById.get(s.accountId)?.name ?? 'ukjent konto'}
@@ -278,6 +278,8 @@ function SubscriptionDialog({
   const [name, setName] = useState(sub?.name ?? '');
   const [amount, setAmount] = useState(sub ? formatMoney(sub.amount, sub.currency).replace(/[^\d,]/g, '') : '');
   const [interval, setBillingInterval] = useState<BillingInterval>(sub?.interval ?? 'monthly');
+  const [everyMonths, setEveryMonths] = useState(String(sub?.everyMonths ?? 4));
+  const everyN = Math.min(36, Math.max(1, Math.round(Number(everyMonths) || 0)));
   const [accountId, setAccountId] = useState(sub?.accountId ?? '');
   const [anchorDate, setAnchor] = useState(sub?.anchorDate ?? today);
   const [kind, setKind] = useState<Subscription['kind']>(sub?.kind ?? defaultKind);
@@ -293,12 +295,14 @@ function SubscriptionDialog({
     const minor = parseAmount(amount, currency);
     if (!name.trim()) return setError('Gi abonnementet et navn.');
     if (minor === null || minor <= 0) return setError('Oppgi en gyldig pris, f.eks. 179,00.');
+    if (interval === 'months' && !(Number(everyMonths) >= 1 && Number(everyMonths) <= 36)) return setError('Oppgi antall måneder mellom trekk (1–36).');
     onSave({
       id: sub?.id ?? newId('sub'),
       name: name.trim(),
       amount: Math.abs(minor),
       currency,
       interval,
+      everyMonths: interval === 'months' ? everyN : undefined,
       accountId: accountId || null,
       anchorDate,
       kind,
@@ -328,11 +332,18 @@ function SubscriptionDialog({
             <select className="select" value={interval} onChange={(e) => setBillingInterval(e.target.value as BillingInterval)}>
               {(Object.keys(INTERVAL_LABEL) as BillingInterval[]).map((i) => (
                 <option key={i} value={i}>
-                  {INTERVAL_LABEL[i]}
+                  {i === 'months' ? 'Hver … måned (velg antall)' : INTERVAL_LABEL[i]}
                 </option>
               ))}
             </select>
           </label>
+          {interval === 'months' && (
+            <label className="field">
+              <span>Antall måneder mellom trekk</span>
+              <input className="input" inputMode="numeric" value={everyMonths} onChange={(e) => setEveryMonths(e.target.value.replace(/\D/g, ''))} placeholder="4" />
+              <span className="hint">F.eks. 4 for hver 4. måned. Trekkes den uregelmessig (hver 3.–4. måned), velg snittet.</span>
+            </label>
+          )}
           <label className="field">
             <span>Belastes</span>
             <select className="select" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
@@ -368,13 +379,13 @@ function SubscriptionDialog({
           </label>
         </div>
 
-        {sub && sub.status === 'active' && (
+        {(interval !== 'monthly' || (sub && sub.status === 'active')) && (
           <p className="small muted">
-            Neste trekk ca. {formatDate(nextChargeDate({ anchorDate, interval }, today), 'long')} (estimert).
+            {sub && sub.status === 'active' && <>Neste trekk ca. {formatDate(nextChargeDate({ anchorDate, interval, everyMonths: everyN }, today), 'long')} (estimert). </>}
             {interval !== 'monthly' && (
               <>
-                {' '}
-                Tilsvarer {formatMoney(monthlyCost({ amount: parseAmount(amount, currency) ?? 0, interval }), currency)} per måned i sammenligningen.
+                Regnes som <strong>{formatMoney(monthlyCost({ amount: parseAmount(amount, currency) ?? 0, interval, everyMonths: everyN }), currency)} per måned</strong> i den månedlige summen (
+                {formatMoney(yearlyCost({ amount: parseAmount(amount, currency) ?? 0, interval, everyMonths: everyN }), currency)} per år).
               </>
             )}
           </p>

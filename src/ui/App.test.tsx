@@ -313,3 +313,19 @@ describe('Bedrift – betalt av eier', () => {
     expect(store.data.rules.some((r) => r.business)).toBe(true);
   });
 });
+
+describe('Abonnement hver N. måned', () => {
+  it('lagrer intervall og regner månedlig kostnad', async () => {
+    const { user, store } = setup('/abonnementer');
+    await user.click(screen.getByRole('button', { name: /Legg til abonnement/ }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Navn'), 'Tannlegeforsikring');
+    await user.type(within(dialog).getByLabelText(/Pris per trekk/), '400');
+    await user.selectOptions(within(dialog).getByLabelText('Intervall'), 'months');
+    await user.clear(within(dialog).getByLabelText(/Antall måneder mellom trekk/));
+    await user.type(within(dialog).getByLabelText(/Antall måneder mellom trekk/), '4');
+    expect(within(dialog).getByText(/100,00 kr per måned/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: /Lagre|Legg til/ }));
+    expect(store.data.subscriptions.find((s) => s.name === 'Tannlegeforsikring')).toMatchObject({ interval: 'months', everyMonths: 4, amount: 40_000 });
+  });
+});

@@ -8,69 +8,84 @@ export const INTERVAL_LABEL: Record<BillingInterval, string> = {
   monthly: 'Månedlig',
   quarterly: 'Kvartalsvis',
   yearly: 'Årlig',
+  months: 'Hver … måned',
 };
 
+type IntervalOf = Pick<Subscription, 'interval' | 'everyMonths'>;
+
+/** Måneder mellom trekk (ukentlig håndteres for seg). */
+export function monthsBetween(sub: IntervalOf): number {
+  switch (sub.interval) {
+    case 'weekly':
+      return 12 / 52;
+    case 'monthly':
+      return 1;
+    case 'quarterly':
+      return 3;
+    case 'yearly':
+      return 12;
+    case 'months':
+      return Math.min(36, Math.max(1, Math.round(sub.everyMonths ?? 2)));
+  }
+}
+
+/** «Månedlig», «Hver 4. måned» osv. */
+export function intervalText(sub: IntervalOf): string {
+  return sub.interval === 'months' ? `Hver ${monthsBetween(sub)}. måned` : INTERVAL_LABEL[sub.interval];
+}
+
+/** Kort enhet rett etter beløpet: «/ mnd», «/ år», «/ 4 mnd». */
+export function perText(sub: IntervalOf): string {
+  switch (sub.interval) {
+    case 'weekly':
+      return '/ uke';
+    case 'monthly':
+      return '/ mnd';
+    case 'quarterly':
+      return '/ kvartal';
+    case 'yearly':
+      return '/ år';
+    case 'months':
+      return `/ ${monthsBetween(sub)} mnd`;
+  }
+}
+
 /**
- * Månedlig kostnad. Årsabonnementer fordeles over 12 måneder slik at
- * månedssammenligningen blir rettferdig; faktisk trekkdato vises separat.
+ * Månedlig kostnad. Abonnementer som trekkes sjeldnere enn månedlig fordeles jevnt
+ * (f.eks. 400 kr hver 4. måned = 100 kr/mnd), slik at månedssammenligningen blir rettferdig.
  */
-export function monthlyCost(sub: Pick<Subscription, 'amount' | 'interval'>): Minor {
-  switch (sub.interval) {
-    case 'weekly':
-      return Math.round((sub.amount * 52) / 12);
-    case 'monthly':
-      return sub.amount;
-    case 'quarterly':
-      return Math.round(sub.amount / 3);
-    case 'yearly':
-      return Math.round(sub.amount / 12);
-  }
+export function monthlyCost(sub: Pick<Subscription, 'amount' | 'interval' | 'everyMonths'>): Minor {
+  if (sub.interval === 'weekly') return Math.round((sub.amount * 52) / 12);
+  return Math.round(sub.amount / monthsBetween(sub));
 }
 
-export function yearlyCost(sub: Pick<Subscription, 'amount' | 'interval'>): Minor {
-  switch (sub.interval) {
-    case 'weekly':
-      return sub.amount * 52;
-    case 'monthly':
-      return sub.amount * 12;
-    case 'quarterly':
-      return sub.amount * 4;
-    case 'yearly':
-      return sub.amount;
-  }
+export function yearlyCost(sub: Pick<Subscription, 'amount' | 'interval' | 'everyMonths'>): Minor {
+  if (sub.interval === 'weekly') return sub.amount * 52;
+  return Math.round((sub.amount * 12) / monthsBetween(sub));
 }
 
-function step(date: IsoDate, interval: BillingInterval, n: number, day: number): IsoDate {
-  switch (interval) {
-    case 'weekly':
-      return addDays(date, 7 * n);
-    case 'monthly':
-      return addMonths(date, n, day);
-    case 'quarterly':
-      return addMonths(date, 3 * n, day);
-    case 'yearly':
-      return addMonths(date, 12 * n, day);
-  }
+function step(date: IsoDate, sub: IntervalOf, n: number, day: number): IsoDate {
+  if (sub.interval === 'weekly') return addDays(date, 7 * n);
+  return addMonths(date, monthsBetween(sub) * n, day);
 }
 
 /**
  * Estimert neste trekk (på eller etter `today`), beregnet fra kjent trekkdato
  * og intervall. Dette er et anslag – ikke en opplysning fra leverandøren.
  */
-export function nextChargeDate(sub: Pick<Subscription, 'anchorDate' | 'interval'>, today: IsoDate): IsoDate {
+export function nextChargeDate(sub: Pick<Subscription, 'anchorDate' | 'interval' | 'everyMonths'>, today: IsoDate): IsoDate {
   const day = parseIsoDate(sub.anchorDate).getUTCDate();
   let n = 0;
   let d = sub.anchorDate;
   // Hopp tilnærmet frem først for å unngå lange løkker.
   if (sub.interval !== 'weekly') {
     const months = Math.max(0, Math.floor(daysBetween(sub.anchorDate, today) / 31) - 1);
-    const per = sub.interval === 'monthly' ? 1 : sub.interval === 'quarterly' ? 3 : 12;
-    n = Math.floor(months / per);
-    d = step(sub.anchorDate, sub.interval, n, day);
+    n = Math.floor(months / monthsBetween(sub));
+    d = step(sub.anchorDate, sub, n, day);
   }
   while (d < today) {
     n += 1;
-    d = step(sub.anchorDate, sub.interval, n, day);
+    d = step(sub.anchorDate, sub, n, day);
   }
   return d;
 }
