@@ -1,6 +1,6 @@
 import { tx } from '../test/factories';
 import { account } from '../test/factories';
-import { detectSubscriptions, monthlyCost, nextChargeDate, subscriptionTotals, yearlyCost } from './subscriptions';
+import { detectSubscriptions, intervalText, monthlyCost, nextChargeDate, perText, subscriptionTotals, yearlyCost } from './subscriptions';
 import { estimateRemaining, upcomingPayments } from './upcoming';
 import type { Subscription } from './types';
 
@@ -180,5 +180,19 @@ describe('abonnementer med ujevnt mønster fra ekte banker', () => {
   it('hopper over tjenester som allerede er bekreftet', () => {
     const s = detectSubscriptions([tx({ accountId: 'r', amount: -7500, counterparty: 'Spotify P471779FF7', bookingDate: '2026-09-21', category: 'abonnementer' })], [], ['spotify']);
     expect(s).toHaveLength(0);
+  });
+});
+
+describe('abonnement hver N. måned', () => {
+  const sub = { amount: 40_000, interval: 'months' as const, everyMonths: 4 };
+  it('fordeles jevnt i den månedlige summen', () => {
+    expect(monthlyCost(sub)).toBe(10_000);
+    expect(yearlyCost(sub)).toBe(120_000);
+    expect(intervalText(sub)).toBe('Hver 4. måned');
+    expect(perText(sub)).toBe('/ 4 mnd');
+  });
+  it('estimerer neste trekk fire måneder frem', () => {
+    expect(nextChargeDate({ anchorDate: '2026-06-15', interval: 'months', everyMonths: 4 }, '2026-09-27')).toBe('2026-10-15');
+    expect(nextChargeDate({ anchorDate: '2026-06-15', interval: 'months', everyMonths: 4 }, '2026-10-16')).toBe('2027-02-15');
   });
 });

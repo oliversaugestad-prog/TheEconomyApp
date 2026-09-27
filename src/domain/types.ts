@@ -142,7 +142,8 @@ export interface Transaction {
   mcc?: string | null;
 }
 
-export type BillingInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+/** `months`: hver N. måned (N i `everyMonths`), f.eks. hver 4. måned. */
+export type BillingInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'months';
 
 export interface PricePoint {
   date: IsoDate;
@@ -156,6 +157,8 @@ export interface Subscription {
   amount: Minor;
   currency: CurrencyCode;
   interval: BillingInterval;
+  /** Antall måneder mellom trekk når `interval` er `months`. */
+  everyMonths?: number;
   accountId: string | null;
   /** Første kjente trekkdato; brukes til å estimere neste trekk. */
   anchorDate: IsoDate;
