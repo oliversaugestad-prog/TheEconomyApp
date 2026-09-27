@@ -310,7 +310,7 @@ export function OverviewPage() {
             </Link>
           </div>
           {breakdown.length ? (
-            <CategoryBars shares={breakdown} currency={base} limit={6} onSelect={(c) => navigate(`/transaksjoner?kategori=${c}&fra=${month}-01`)} />
+            <CategoryBars shares={breakdown} currency={base} onSelect={(c) => navigate(`/transaksjoner?kategori=${c}&fra=${month}-01`)} />
           ) : (
             <Empty icon={<Receipt size={22} />} title="Ingen utgifter denne måneden" />
           )}
