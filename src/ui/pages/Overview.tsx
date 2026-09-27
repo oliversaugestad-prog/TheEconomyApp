@@ -15,7 +15,7 @@ import {
 } from '../../domain/calculations';
 import { daysBetween, formatDate, formatMonth, monthKey, relativeDay } from '../../domain/dates';
 import { formatMoney } from '../../domain/money';
-import { chargesFor, detectPriceChange, subscriptionTotals } from '../../domain/subscriptions';
+import { subscriptionPriceChange, subscriptionTotals } from '../../domain/subscriptions';
 import { summarizeBusiness } from '../../domain/business';
 import { netWorth } from '../../domain/netWorth';
 import { estimateRemaining, upcomingPayments } from '../../domain/upcoming';
@@ -72,7 +72,7 @@ export function OverviewPage() {
     }
     if (notif.priceChanges) {
       for (const sub of data.subscriptions.filter((x) => x.status === 'active')) {
-        const change = detectPriceChange(chargesFor(sub, data.transactions));
+        const change = subscriptionPriceChange(sub, data.transactions);
         if (change && daysBetween(change.date, today) <= 45) {
           out.push({ id: `pc-${sub.id}`, text: `${sub.name} trakk ${formatMoney(change.to, sub.currency)} ${formatDate(change.date, 'short')}, mot ${formatMoney(change.from, sub.currency)} før. Mulig prisendring.` });
         }

@@ -9,7 +9,7 @@ import {
   perText,
   yearlyCost,
   chargesFor,
-  detectPriceChange,
+  subscriptionPriceChange,
   detectSubscriptions,
   monthlyCost,
   nextChargeDate,
@@ -46,7 +46,8 @@ export function SubscriptionsPage() {
   const list = data.subscriptions
     .filter((s) => (tab === 'ended' ? s.status === 'ended' : s.status === 'active' && s.kind === tab))
     .map((s) => ({ s, next: nextChargeDate(s, today) }))
-    .sort((a, b) => a.next.localeCompare(b.next));
+    // Private først, bedriftens abonnementer nederst – hver gruppe etter neste trekk.
+    .sort((a, b) => Number(!!a.s.business) - Number(!!b.s.business) || a.next.localeCompare(b.next));
 
   return (
     <Page
@@ -122,11 +123,18 @@ export function SubscriptionsPage() {
         <section className="card flush">
           {list.length ? (
             <ul className="list">
-              {list.map(({ s, next }) => {
-                const change = detectPriceChange(chargesFor(s, data.transactions));
+              {list.map(({ s, next }, i) => {
+                const change = subscriptionPriceChange(s, data.transactions);
                 const acc = s.accountId ? accById.get(s.accountId) : null;
+                const firstBusiness = s.business && !list[i - 1]?.s.business;
                 return (
                   <li key={s.id}>
+                    {firstBusiness && (
+                      <div className="list-divider">
+                        <Briefcase size={14} aria-hidden="true" /> Bedrift – betalt av eier
+                        <span className="subtle"> · ikke med i summene over</span>
+                      </div>
+                    )}
                     <button type="button" className="list-item" onClick={() => setEditing(s)}>
                       <span className="avatar" aria-hidden="true">
                         <Repeat size={18} />

@@ -366,3 +366,17 @@ describe('Bedrift som egen post i oversikten', () => {
     expect(screen.getByRole('button', { name: 'Bedrift', pressed: true })).toBeInTheDocument();
   });
 });
+
+describe('Bedriftsabonnementer nederst', () => {
+  it('lister private abonnementer først og bedriftens under egen overskrift', async () => {
+    const { store } = setup('/abonnementer');
+    act(() => {
+      const netflix = store.data.subscriptions.find((s) => s.matchKey === 'netflix')!;
+      store.upsertSubscription({ ...netflix, business: true });
+    });
+    const items = screen.getAllByRole('listitem');
+    const last = items[items.length - 1];
+    expect(last.textContent).toMatch(/Netflix/);
+    expect(screen.getByText('Bedrift – betalt av eier', { selector: '.list-divider' })).toBeInTheDocument();
+  });
+});

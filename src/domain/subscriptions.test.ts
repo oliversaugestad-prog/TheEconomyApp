@@ -1,6 +1,6 @@
 import { tx } from '../test/factories';
 import { account } from '../test/factories';
-import { detectSubscriptions, intervalText, monthlyCost, nextChargeDate, perText, subscriptionTotals, yearlyCost } from './subscriptions';
+import { detectSubscriptions, subscriptionPriceChange, intervalText, monthlyCost, nextChargeDate, perText, subscriptionTotals, yearlyCost } from './subscriptions';
 import { estimateRemaining, upcomingPayments } from './upcoming';
 import type { Subscription } from './types';
 
@@ -194,5 +194,28 @@ describe('abonnement hver N. måned', () => {
   it('estimerer neste trekk fire måneder frem', () => {
     expect(nextChargeDate({ anchorDate: '2026-06-15', interval: 'months', everyMonths: 4 }, '2026-09-27')).toBe('2026-10-15');
     expect(nextChargeDate({ anchorDate: '2026-06-15', interval: 'months', everyMonths: 4 }, '2026-10-16')).toBe('2027-02-15');
+  });
+});
+
+describe('prisendring for registrerte abonnementer', () => {
+  it('overser små tilleggstrekk og valutastøy', () => {
+    const eesy = { matchKey: 'eesy', amount: 13973 };
+    const txs = [
+      tx({ accountId: 'l', amount: -13955, counterparty: 'Eesy.dk', bookingDate: '2026-09-02' }),
+      tx({ accountId: 'l', amount: -175, counterparty: 'Eesy.dk', bookingDate: '2026-09-22' }),
+    ];
+    expect(subscriptionPriceChange(eesy, txs)).toBeNull();
+    const usd = [
+      tx({ accountId: 'a', amount: -18185, counterparty: 'ANTHROPIC SAN FRANCISCO', bookingDate: '2026-09-18' }),
+      tx({ accountId: 'a', amount: -18483, counterparty: 'ANTHROPIC SAN FRANCISCO', bookingDate: '2026-09-20' }),
+    ];
+    expect(subscriptionPriceChange({ matchKey: 'anthropic', amount: 18300 }, usd)).toBeNull();
+  });
+  it('melder reell prisøkning', () => {
+    const txs = [
+      tx({ accountId: 'k', amount: -16900, counterparty: 'NETFLIX.COM', bookingDate: '2026-08-09' }),
+      tx({ accountId: 'k', amount: -17900, counterparty: 'NETFLIX.COM', bookingDate: '2026-09-09' }),
+    ];
+    expect(subscriptionPriceChange({ matchKey: 'netflix', amount: 17900 }, txs)).toMatchObject({ from: 16900, to: 17900 });
   });
 });

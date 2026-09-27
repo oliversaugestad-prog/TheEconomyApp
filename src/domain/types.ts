@@ -103,6 +103,7 @@ export type TransactionKind = 'normal' | 'internal_transfer' | 'card_payment' | 
 export type CategoryId =
   | 'bolig'
   | 'lan'
+  | 'medlemskap'
   | 'dagligvarer'
   | 'transport'
   | 'shopping'

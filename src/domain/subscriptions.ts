@@ -187,6 +187,17 @@ export function detectPriceChange(charges: Transaction[]): PriceChange | null {
   return { from: -prev.amount, to: -last.amount, date: last.bookingDate };
 }
 
+/**
+ * Prisendring for et registrert abonnement. Små tilleggstrekk (f.eks. 1,75 kr for SMS
+ * på mobilabonnementet) og valutasvingninger under 3 % regnes ikke som prisendring.
+ */
+export function subscriptionPriceChange(sub: Pick<Subscription, 'matchKey' | 'amount'>, transactions: Transaction[]): PriceChange | null {
+  const main = chargesFor(sub, transactions).filter((t) => Math.abs(-t.amount - sub.amount) <= sub.amount * 0.5);
+  const change = detectPriceChange(main);
+  if (!change || Math.abs(change.to - change.from) < change.from * 0.03) return null;
+  return change;
+}
+
 export interface SubscriptionSuggestion {
   matchKey: string;
   name: string;
