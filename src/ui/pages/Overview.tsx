@@ -18,6 +18,8 @@ import { formatMoney } from '../../domain/money';
 import { subscriptionPriceChange, subscriptionTotals } from '../../domain/subscriptions';
 import { summarizeBusiness } from '../../domain/business';
 import { netWorth } from '../../domain/netWorth';
+import { summarizeEvent } from '../../domain/events';
+import { EventCard } from './Events';
 import { estimateRemaining, upcomingPayments } from '../../domain/upcoming';
 import type { Transaction } from '../../domain/types';
 import { useData, useSnapshot, useStore, useToday } from '../../state/StoreContext';
@@ -58,6 +60,14 @@ export function OverviewPage() {
   const remaining = useMemo(() => estimateRemaining(data.accounts, upcoming, base, data.rates), [data.accounts, upcoming, base, data.rates]);
   const recent = useMemo(() => sortByDateDesc(txs).slice(0, 6), [txs]);
   const breakdown = useMemo(() => categoryBreakdown(flows), [flows]);
+  const activeEvents = useMemo(
+    () =>
+      (data.events ?? [])
+        .filter((e) => !e.archived)
+        .map((ev) => ({ ev, s: summarizeEvent(ev, data.transactions, data.rates) }))
+        .sort((a, b) => (b.ev.startDate ?? b.ev.createdAt).localeCompare(a.ev.startDate ?? a.ev.createdAt)),
+    [data.events, data.transactions, data.rates],
+  );
   const bizMonth = useMemo(() => businessBreakdown(monthTransactions(txs, month), base, data.rates), [txs, month, base, data.rates]);
   const accById = useMemo(() => new Map(data.accounts.map((a) => [a.id, a])), [data.accounts]);
 
@@ -262,6 +272,24 @@ export function OverviewPage() {
           </Link>
         </div>
       </div>
+
+      <section className="card" aria-labelledby="events-h">
+        <div className="card-head">
+          <h2 id="events-h">Hendelser og turer</h2>
+          <Link className="link" to="/hendelser">
+            {activeEvents.length ? 'Se alle' : 'Lag en hendelse'}
+          </Link>
+        </div>
+        {activeEvents.length ? (
+          <div className="grid cols-3" style={{ gap: 12 }}>
+            {activeEvents.slice(0, 3).map(({ ev, s }) => (
+              <EventCard key={ev.id} ev={ev} s={s} />
+            ))}
+          </div>
+        ) : (
+          <p className="small muted">Samle kjøp til en tur eller hendelse, sett et budsjett og se om du holder deg innenfor.</p>
+        )}
+      </section>
 
       <div className="grid overview">
         <section className="card" aria-labelledby="month-h">
