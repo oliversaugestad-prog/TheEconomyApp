@@ -423,3 +423,21 @@ describe('Hendelser', () => {
     expect(store.data.transactions.filter((t) => t.eventId === 'ev-k')).toHaveLength(1);
   });
 });
+
+describe('Anslag på hendelser', () => {
+  it('legger inn antatt pris og viser forventet totalt', async () => {
+    const { user, store } = setup('/hendelser/ev-m');
+    act(() => {
+      store.upsertEvent({ id: 'ev-m', name: 'Marokko', emoji: '✈️', budget: 1_000_000, currency: 'NOK', startDate: null, endDate: null, note: '', items: [], archived: false, createdAt: '' });
+    });
+    await user.click(screen.getAllByRole('button', { name: /Anslag|Legg til anslag/ })[0]);
+    const dialog = screen.getByRole('dialog', { name: 'Nytt anslag' });
+    await user.type(within(dialog).getByLabelText('Hva'), 'Hotell');
+    await user.type(within(dialog).getByLabelText('Antatt pris'), '6 000');
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+    expect(store.data.events![0].items[0]).toMatchObject({ name: 'Hotell', amount: 600_000, estimate: true, done: false });
+    expect(screen.getAllByText(/Forventet totalt/).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('checkbox', { name: 'Hotell er betalt' }));
+    expect(store.data.events![0].items[0].done).toBe(true);
+  });
+});

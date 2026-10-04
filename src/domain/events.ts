@@ -9,6 +9,14 @@ export interface EventSummary {
   spent: Minor;
   /** Herav manuelle utgifter. */
   manual: Minor;
+  /** Anslag som ikke er betalt ennå. */
+  estimated: Minor;
+  /** Forventet totalt: brukt + gjenstående anslag. */
+  forecast: Minor;
+  /** Budsjett minus forventet totalt. `null` uten budsjett. */
+  forecastRemaining: Minor | null;
+  /** Status for det forventede totalbeløpet. */
+  forecastStatus: 'none' | 'ok' | 'warn' | 'over';
   budget: Minor | null;
   /** Budsjett minus brukt. Negativt = over budsjett. `null` uten budsjett. */
   remaining: Minor | null;
@@ -50,23 +58,36 @@ export function summarizeEvent(ev: SpendEvent, transactions: Transaction[], rate
     by.set(t.category, (by.get(t.category) ?? 0) + c.amount);
   }
   let manual = 0;
+  let estimated = 0;
   for (const it of ev.items) {
+    if (it.estimate && it.done) continue;
     const c = convert(it.amount, it.currency, ev.currency, rates);
     if (!c) {
       missing += 1;
       continue;
     }
-    manual += c.amount;
+    if (it.estimate) estimated += c.amount;
+    else manual += c.amount;
   }
   spent += manual;
+  const statusOf = (value: Minor) => {
+    if (ev.budget === null) return 'none' as const;
+    const u = ev.budget ? value / ev.budget : value > 0 ? Infinity : 0;
+    return u > 1 ? ('over' as const) : u >= 0.85 ? ('warn' as const) : ('ok' as const);
+  };
   const remaining = ev.budget === null ? null : ev.budget - spent;
   const usage = ev.budget ? spent / ev.budget : ev.budget === 0 ? (spent > 0 ? Infinity : 0) : null;
-  const status = usage === null ? 'none' : usage > 1 ? 'over' : usage >= 0.85 ? 'warn' : 'ok';
-  const dates = [...linked.map((t) => t.bookingDate), ...ev.items.map((i) => i.date).filter((d): d is string => !!d)].sort();
+  const status = statusOf(spent);
+  const forecast = spent + estimated;
+  const dates = [...linked.map((t) => t.bookingDate), ...ev.items.filter((i) => !i.estimate).map((i) => i.date).filter((d): d is string => !!d)].sort();
   return {
     currency: ev.currency,
     spent,
     manual,
+    estimated,
+    forecast,
+    forecastRemaining: ev.budget === null ? null : ev.budget - forecast,
+    forecastStatus: statusOf(forecast),
     budget: ev.budget,
     remaining,
     usage,

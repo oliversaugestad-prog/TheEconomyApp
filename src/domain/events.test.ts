@@ -42,6 +42,22 @@ describe('hendelser', () => {
     expect(s.remaining).toBe(-100_000);
   });
 
+  it('regner forventet totalt med anslag, og slutter å telle betalte anslag', () => {
+    const base = { ...ev, budget: 1_000_000, items: [
+      { id: 'h', name: 'Hotell', amount: 600_000, currency: 'NOK', date: null, estimate: true },
+      { id: 'b', name: 'Leiebil', amount: 300_000, currency: 'NOK', date: null, estimate: true, done: true },
+    ] };
+    const txs = [tx({ accountId: 'k', amount: -500_000, counterparty: 'Fly', eventId: 'ev1' })];
+    const s = summarizeEvent(base, txs, rates);
+    expect(s.spent).toBe(500_000);
+    expect(s.estimated).toBe(600_000);
+    expect(s.forecast).toBe(1_100_000);
+    expect(s.forecastRemaining).toBe(-100_000);
+    expect(s.forecastStatus).toBe('over');
+    // Brukt alene er fortsatt innenfor
+    expect(s.status).toBe('ok');
+  });
+
   it('foreslår ukoblede kjøp i perioden, inkludert to dager før start', () => {
     const txs = [
       tx({ id: 'a', accountId: 'k', amount: -1000, counterparty: 'Fly', bookingDate: '2026-10-08' }),

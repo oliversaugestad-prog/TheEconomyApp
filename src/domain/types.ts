@@ -289,7 +289,11 @@ export interface AppData {
   events?: SpendEvent[];
 }
 
-/** Utgift som ikke finnes i banken, f.eks. kontanter eller noe en venn la ut for deg. */
+/**
+ * Post på en hendelse som ikke kommer fra banken:
+ * - faktisk utgift uten kort (kontanter, noe en venn la ut), eller
+ * - anslag (`estimate`): hva du tror noe vil koste, før det er betalt.
+ */
 export interface EventItem {
   id: string;
   name: string;
@@ -297,6 +301,10 @@ export interface EventItem {
   amount: Minor;
   currency: CurrencyCode;
   date: IsoDate | null;
+  /** Anslått/antatt pris – ikke betalt ennå. */
+  estimate?: boolean;
+  /** Anslaget er betalt (det faktiske kjøpet er koblet) og telles ikke lenger. */
+  done?: boolean;
 }
 
 /** En hendelse, tur eller ting som kjøp kan kobles til, med valgfritt budsjett. */

@@ -1667,3 +1667,28 @@ hr.sep {
 .event-tag {
   white-space: nowrap;
 }
+.budget-bar {
+  display: flex;
+}
+.budget-bar > span {
+  border-radius: 0;
+}
+.budget-bar > span:first-child {
+  border-radius: 999px 0 0 999px;
+}
+.budget-bar > span.estimate {
+  background: repeating-linear-gradient(135deg, currentColor 0 4px, transparent 4px 8px);
+  opacity: 0.55;
+}
+.est-check {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-left: 18px;
+  cursor: pointer;
+}
+.est-check input {
+  width: 18px;
+  height: 18px;
+}
