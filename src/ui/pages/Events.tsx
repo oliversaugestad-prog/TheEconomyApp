@@ -1,4 +1,4 @@
-import { Archive, CalendarRange, Link2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Archive, Calculator, CalendarRange, Link2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { sortByDateDesc } from '../../domain/calculations';
@@ -25,14 +25,41 @@ function dateRange(ev: Pick<SpendEvent, 'startDate' | 'endDate'>): string | null
 }
 
 /** Fremdriftslinje mot budsjettet. Fargen forsterkes av tekst, ikke alene. */
+/** Brukt (heltrukket) og gjenstående anslag (stripet) mot budsjettet. */
 function BudgetBar({ s }: { s: EventSummary }) {
-  if (s.usage === null) return null;
-  const pct = Math.min(100, Math.round(s.usage * 100));
-  const color = s.status === 'over' ? 'var(--danger)' : s.status === 'warn' ? 'var(--warning)' : 'var(--positive)';
+  if (s.usage === null || !s.budget) return null;
+  const spentPct = Math.min(100, (s.spent / s.budget) * 100);
+  const estPct = Math.max(0, Math.min(100 - spentPct, (s.estimated / s.budget) * 100));
+  const tone = s.estimated > 0 ? s.forecastStatus : s.status;
+  const color = tone === 'over' ? 'var(--danger)' : tone === 'warn' ? 'var(--warning)' : 'var(--positive)';
+  const label = `Brukt ${Math.round(s.usage * 100)} prosent av budsjettet${s.estimated > 0 ? `, forventet ${Math.round((s.forecast / s.budget) * 100)} prosent med anslag` : ''}`;
   return (
-    <div className="progress" role="img" aria-label={`Brukt ${Math.round(s.usage * 100)} prosent av budsjettet`}>
-      <span style={{ width: `${pct}%`, background: color }} />
+    <div className="progress budget-bar" role="img" aria-label={label}>
+      <span style={{ width: `${spentPct}%`, background: color }} />
+      {estPct > 0 && <span className="estimate" style={{ width: `${estPct}%`, color }} />}
     </div>
+  );
+}
+
+/** «Forventet totalt» når det finnes anslag. */
+function ForecastStatus({ s }: { s: EventSummary }) {
+  if (s.estimated <= 0) return null;
+  return (
+    <span>
+      Forventet totalt <Amount value={s.forecast} currency={s.currency} />
+      {s.forecastRemaining !== null &&
+        (s.forecastRemaining >= 0 ? (
+          <span style={{ opacity: 0.85 }}>
+            {' '}
+            · ca. <Amount value={s.forecastRemaining} currency={s.currency} /> til overs
+          </span>
+        ) : (
+          <span style={{ color: 'var(--danger)' }}>
+            {' '}
+            · ca. <Amount value={-s.forecastRemaining} currency={s.currency} /> over budsjett
+          </span>
+        ))}
+    </span>
   );
 }
 
@@ -166,6 +193,11 @@ export function EventCard({ ev, s }: { ev: SpendEvent; s: EventSummary }) {
       <p className="small" style={{ marginTop: 6 }}>
         <BudgetStatus s={s} />
       </p>
+      {s.estimated > 0 && (
+        <p className="xsmall" style={{ marginTop: 2 }}>
+          <ForecastStatus s={s} />
+        </p>
+      )}
     </Link>
   );
 }
@@ -177,7 +209,7 @@ export function EventDetailPage() {
   const ev = (data.events ?? []).find((e) => e.id === id);
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [addingItem, setAddingItem] = useState<EventItem | 'new' | null>(null);
+  const [addingItem, setAddingItem] = useState<EventItem | 'new' | 'estimate' | null>(null);
   const [openTx, setOpenTx] = useState<Transaction | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
@@ -196,14 +228,16 @@ export function EventDetailPage() {
   }
   const accById = new Map(data.accounts.map((a) => [a.id, a]));
   const total = s.byCategory.reduce((sum, c) => sum + c.amount, 0);
+  const estimates = ev.items.filter((i) => i.estimate);
+  const actualItems = ev.items.filter((i) => !i.estimate);
 
   return (
     <Page
       title={`${ev.emoji} ${ev.name}`}
       back={{ to: '/hendelser', label: 'Tilbake til hendelser' }}
       actions={
-        <button type="button" className="btn small" onClick={() => setEditing(true)}>
-          <Pencil size={16} aria-hidden="true" /> Rediger
+        <button type="button" className="btn small" onClick={() => setEditing(true)} aria-label="Rediger hendelse">
+          <Pencil size={16} aria-hidden="true" /> <span className="desktop-only" aria-hidden="true">Rediger</span>
         </button>
       }
     >
@@ -226,6 +260,11 @@ export function EventDetailPage() {
             <BudgetStatus s={s} />
           </span>
           {s.usage !== null && <span>{Math.round(s.usage * 100)} % brukt</span>}
+          {s.estimated > 0 && (
+            <span>
+              <ForecastStatus s={s} />
+            </span>
+          )}
         </div>
         {s.usage !== null && (
           <div style={{ marginTop: 12 }}>
@@ -236,10 +275,65 @@ export function EventDetailPage() {
           <button type="button" className="btn glass small" onClick={() => setAdding(true)}>
             <Link2 size={16} aria-hidden="true" /> Koble kjøp
           </button>
+          <button type="button" className="btn glass small" onClick={() => setAddingItem('estimate')}>
+            <Calculator size={16} aria-hidden="true" /> Anslag
+          </button>
           <button type="button" className="btn glass small" onClick={() => setAddingItem('new')}>
             <Plus size={16} aria-hidden="true" /> Utgift uten kort
           </button>
         </div>
+      </section>
+
+      <section className="card flush" aria-labelledby="ev-est">
+        <div className="card-head" style={{ padding: '18px 18px 0' }}>
+          <div>
+            <h2 id="ev-est">Anslag – det du tror det blir</h2>
+            <p className="xsmall subtle">Antatt pris for ting som ikke er betalt ennå, f.eks. hotell, leiebil eller mat. Huk av «Betalt» når det faktiske kjøpet er koblet.</p>
+          </div>
+          <button type="button" className="btn small" onClick={() => setAddingItem('estimate')} aria-label="Legg til anslag">
+            <Plus size={16} aria-hidden="true" />
+          </button>
+        </div>
+        {estimates.length ? (
+          <>
+            <ul className="list" style={{ marginTop: 8 }}>
+              {estimates.map((it) => (
+                <li key={it.id} className="row" style={{ gap: 0 }}>
+                  <label className="est-check" title="Betalt">
+                    <input
+                      type="checkbox"
+                      checked={!!it.done}
+                      onChange={(e) => store.upsertEvent({ ...ev, items: ev.items.map((i) => (i.id === it.id ? { ...i, done: e.target.checked } : i)) })}
+                      aria-label={`${it.name} er betalt`}
+                    />
+                    <span className="xsmall subtle">Betalt</span>
+                  </label>
+                  <button type="button" className="list-item" style={{ flex: 1, minWidth: 0 }} onClick={() => setAddingItem(it)}>
+                    <span className="li-main">
+                      <span className="li-title" style={{ display: 'block', textDecoration: it.done ? 'line-through' : undefined, opacity: it.done ? 0.6 : 1 }}>
+                        {it.name}
+                      </span>
+                      <span className="li-sub" style={{ display: 'block' }}>
+                        {it.done ? 'Betalt – telles ikke lenger som anslag' : it.date ? `Antatt ${formatDate(it.date, 'short')}` : 'Anslag'}
+                      </span>
+                    </span>
+                    <span className="li-end" style={{ opacity: it.done ? 0.6 : 1 }}>
+                      ca. <Amount value={it.amount} currency={it.currency} />
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="small" style={{ padding: '10px 18px 16px' }}>
+              Gjenstående anslag: <strong><Amount value={s.estimated} currency={s.currency} /></strong> · Brukt: <Amount value={s.spent} currency={s.currency} /> · Forventet totalt:{' '}
+              <strong><Amount value={s.forecast} currency={s.currency} /></strong>
+            </p>
+          </>
+        ) : (
+          <p className="small muted" style={{ padding: '10px 18px 18px' }}>
+            Legg inn hva du tror turen koster før du drar – f.eks. «Hotell, ca. 6 000 kr» – så ser du om planen holder seg innenfor budsjettet.
+          </p>
+        )}
       </section>
 
       {s.missing > 0 && <Notice tone="warn">{s.missing} post(er) i fremmed valuta mangler valutakurs og er ikke med i summen.</Notice>}
@@ -322,9 +416,9 @@ export function EventDetailPage() {
               <Plus size={16} aria-hidden="true" />
             </button>
           </div>
-          {ev.items.length ? (
+          {actualItems.length ? (
             <ul className="list" style={{ marginTop: 8 }}>
-              {ev.items.map((it) => (
+              {actualItems.map((it) => (
                 <li key={it.id}>
                   <button type="button" className="list-item" onClick={() => setAddingItem(it)}>
                     <span className="li-main">
@@ -399,7 +493,14 @@ export function EventDetailPage() {
         />
       )}
       {adding && <LinkDialog ev={ev} onClose={() => setAdding(false)} />}
-      {addingItem && <ItemDialog ev={ev} item={addingItem === 'new' ? null : addingItem} onClose={() => setAddingItem(null)} />}
+      {addingItem && (
+        <ItemDialog
+          ev={ev}
+          item={typeof addingItem === 'string' ? null : addingItem}
+          estimate={addingItem === 'estimate' || (typeof addingItem !== 'string' && !!addingItem.estimate)}
+          onClose={() => setAddingItem(null)}
+        />
+      )}
       {openTx && <TransactionDetail key={openTx.id} tx={openTx} onClose={() => setOpenTx(null)} />}
     </Page>
   );
@@ -625,7 +726,7 @@ function LinkDialog({ ev, onClose }: { ev: SpendEvent; onClose: () => void }) {
   );
 }
 
-function ItemDialog({ ev, item, onClose }: { ev: SpendEvent; item: EventItem | null; onClose: () => void }) {
+function ItemDialog({ ev, item, estimate, onClose }: { ev: SpendEvent; item: EventItem | null; estimate: boolean; onClose: () => void }) {
   const store = useStore();
   const [name, setName] = useState(item?.name ?? '');
   const [currency, setCurrency] = useState(item?.currency ?? ev.currency);
@@ -640,21 +741,28 @@ function ItemDialog({ ev, item, onClose }: { ev: SpendEvent; item: EventItem | n
     const minor = parseAmount(amount, currency);
     if (!name.trim()) return setError('Gi utgiften et navn.');
     if (minor === null || minor === 0) return setError('Oppgi et beløp, f.eks. 450.');
-    const next: EventItem = { id: item?.id ?? newId('evitem'), name: name.trim(), amount: Math.abs(minor), currency, date: date || null };
+    const next: EventItem = {
+      id: item?.id ?? newId('evitem'),
+      name: name.trim(),
+      amount: Math.abs(minor),
+      currency,
+      date: date || null,
+      ...(estimate ? { estimate: true, done: item?.done ?? false } : {}),
+    };
     save(item ? ev.items.map((i) => (i.id === item.id ? next : i)) : [...ev.items, next]);
     onClose();
   };
 
   return (
-    <Dialog open onClose={onClose} title={item ? item.name : 'Utgift uten kort'}>
+    <Dialog open onClose={onClose} title={item ? item.name : estimate ? 'Nytt anslag' : 'Utgift uten kort'}>
       <form className="stack" onSubmit={submit} noValidate>
         <div className="form-grid two">
           <label className="field">
             <span>Hva</span>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="F.eks. Kontanter i Marrakech" />
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={estimate ? 'F.eks. Hotell 7 netter' : 'F.eks. Kontanter i Marrakech'} />
           </label>
           <label className="field">
-            <span>Beløp</span>
+            <span>{estimate ? 'Antatt pris' : 'Beløp'}</span>
             <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="F.eks. 1 200" />
           </label>
           <label className="field">
@@ -670,7 +778,11 @@ function ItemDialog({ ev, item, onClose }: { ev: SpendEvent; item: EventItem | n
             <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
         </div>
-        <p className="xsmall subtle">Bare for hendelsens budsjett – endrer ikke saldo eller forbruk i oversikten.</p>
+        <p className="xsmall subtle">
+          {estimate
+            ? 'Et anslag er bare en plan. Det teller i «Forventet totalt» til du huker av «Betalt», og endrer ikke saldo eller forbruk.'
+            : 'Bare for hendelsens budsjett – endrer ikke saldo eller forbruk i oversikten.'}
+        </p>
         {error && (
           <p className="error-text" role="alert">
             {error}
