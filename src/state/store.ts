@@ -6,6 +6,7 @@ import { detectSubscriptions, suggestionToSubscription, type SubscriptionSuggest
 import type { CsvRowResult } from '../domain/csv';
 import type {
   Account,
+  SpendEvent,
   AccountType,
   AppData,
   CardStatement,
@@ -172,6 +173,30 @@ export class SaldoStore {
 
   deleteRule(ruleId: string) {
     this.update((d) => this.reclassify({ ...d, rules: d.rules.filter((r) => r.id !== ruleId) }));
+  }
+
+  /* ------------------------------ Hendelser ------------------------------ */
+
+  upsertEvent(ev: SpendEvent) {
+    this.update((d) => {
+      const list = d.events ?? [];
+      return { ...d, events: list.some((e) => e.id === ev.id) ? list.map((e) => (e.id === ev.id ? ev : e)) : [...list, ev] };
+    });
+  }
+
+  /** Sletter hendelsen. Transaksjonene beholdes, men kobles fra. */
+  deleteEvent(eventId: string) {
+    this.update((d) => ({
+      ...d,
+      events: (d.events ?? []).filter((e) => e.id !== eventId),
+      transactions: d.transactions.map((t) => (t.eventId === eventId ? { ...t, eventId: null } : t)),
+    }));
+  }
+
+  /** Kobler transaksjoner til en hendelse (`null` = fjern koblingen). */
+  setTransactionsEvent(txIds: string[], eventId: string | null) {
+    const ids = new Set(txIds);
+    this.update((d) => ({ ...d, transactions: d.transactions.map((t) => (ids.has(t.id) ? { ...t, eventId } : t)) }));
   }
 
   /**

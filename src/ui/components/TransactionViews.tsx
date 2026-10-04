@@ -1,6 +1,6 @@
 import { ArrowLeftRight, Briefcase, CreditCard, RotateCcw, Undo2 } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CATEGORIES, CATEGORY_BY_ID, normalizeCounterparty, ruleMatches, suggestRuleKey, findRule } from '../../domain/categories';
 import { formatDate, relativeDay } from '../../domain/dates';
 import type { Account, CategoryId, Transaction, TransactionKind } from '../../domain/types';
@@ -27,6 +27,8 @@ function KindBadge({ t }: { t: Transaction }) {
 
 export function TransactionRow({ t, account, onOpen, showAccount = true }: { t: Transaction; account?: Account; onOpen: (t: Transaction) => void; showAccount?: boolean }) {
   const today = useToday();
+  const events = useData().events;
+  const ev = t.eventId ? events?.find((e) => e.id === t.eventId) : undefined;
   const cat = CATEGORY_BY_ID[t.category];
   const neutral = t.kind === 'internal_transfer' || t.kind === 'card_payment' || t.kind === 'business';
   const Icon = t.kind === 'card_payment' ? CreditCard : t.kind === 'internal_transfer' ? ArrowLeftRight : t.kind === 'refund' ? Undo2 : t.kind === 'business' ? Briefcase : null;
@@ -43,6 +45,7 @@ export function TransactionRow({ t, account, onOpen, showAccount = true }: { t: 
           {relativeDay(t.bookingDate, today)}
           {showAccount && account ? ` · ${account.name}` : ''}
           {!neutral ? ` · ${cat.label}` : ''}
+          {ev && <span className="event-tag"> · {ev.emoji} {ev.name}</span>}
         </span>
       </span>
       <span className="li-end">
@@ -75,6 +78,7 @@ function effectText(t: Transaction): string {
 export function TransactionDetail({ tx, onClose }: { tx: Transaction | null; onClose: () => void }) {
   const store = useStore();
   const data = useData();
+  const navigate = useNavigate();
   // Hent alltid siste versjon fra lageret.
   const t = tx ? (data.transactions.find((x) => x.id === tx.id) ?? null) : null;
   const [remember, setRemember] = useState(true);
@@ -207,6 +211,35 @@ export function TransactionDetail({ tx, onClose }: { tx: Transaction | null; onC
               </button>
             </div>
           </div>
+        )}
+
+        {t.kind !== 'internal_transfer' && t.kind !== 'card_payment' && (
+          <label className="field">
+            <span>Hendelse</span>
+            <select
+              className="select"
+              value={t.eventId ?? ''}
+              onChange={(e) => {
+                if (e.target.value === '__new') {
+                  onClose();
+                  navigate('/hendelser?ny=1');
+                  return;
+                }
+                store.setTransactionsEvent([t.id], e.target.value || null);
+              }}
+            >
+              <option value="">Ingen</option>
+              {(data.events ?? [])
+                .filter((ev) => !ev.archived || ev.id === t.eventId)
+                .map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.emoji} {ev.name}
+                  </option>
+                ))}
+              <option value="__new">+ Ny hendelse …</option>
+            </select>
+            <span className="hint">Koble kjøpet til en tur eller hendelse for å følge budsjettet.</span>
+          </label>
         )}
 
         <label className="field">

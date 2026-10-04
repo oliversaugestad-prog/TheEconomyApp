@@ -380,3 +380,46 @@ describe('Bedriftsabonnementer nederst', () => {
     expect(screen.getByText('Bedrift – betalt av eier', { selector: '.list-divider' })).toBeInTheDocument();
   });
 });
+
+describe('Hendelser', () => {
+  it('oppretter en tur med budsjett, kobler kjøp og viser status', async () => {
+    const { user, store } = setup('/hendelser');
+    await user.click(screen.getByRole('button', { name: /Ny hendelse/ }));
+    let dialog = screen.getByRole('dialog', { name: 'Ny hendelse' });
+    await user.type(within(dialog).getByLabelText('Navn'), 'Marokko-tur');
+    await user.type(within(dialog).getByLabelText(/Budsjett/), '15 000');
+    await user.click(within(dialog).getByRole('button', { name: 'Opprett' }));
+    const ev = store.data.events![0];
+    expect(ev).toMatchObject({ name: 'Marokko-tur', budget: 1_500_000 });
+
+    // Koble to kjøp via «Koble kjøp»
+    await user.click(screen.getAllByRole('button', { name: /Koble kjøp/ })[0]);
+    dialog = screen.getByRole('dialog', { name: /Koble kjøp til Marokko-tur/ });
+    const boxes = within(dialog).getAllByRole('checkbox');
+    await user.click(boxes[0]);
+    await user.click(boxes[1]);
+    await user.click(within(dialog).getByRole('button', { name: 'Koble 2 kjøp' }));
+    expect(store.data.transactions.filter((t) => t.eventId === ev.id)).toHaveLength(2);
+    expect(screen.getByText(/igjen|Over budsjett/)).toBeInTheDocument();
+
+    // Utgift uten kort teller i budsjettet
+    await user.click(screen.getAllByRole('button', { name: /Utgift uten kort/ })[0]);
+    dialog = screen.getByRole('dialog', { name: 'Utgift uten kort' });
+    await user.type(within(dialog).getByLabelText('Hva'), 'Kontanter');
+    await user.type(within(dialog).getByLabelText('Beløp'), '1 200');
+    await user.click(within(dialog).getByRole('button', { name: 'Lagre' }));
+    expect(store.data.events![0].items[0]).toMatchObject({ name: 'Kontanter', amount: 120_000 });
+  });
+
+  it('lar deg koble en transaksjon til en hendelse fra detaljvisningen', async () => {
+    const { user, store } = setup('/transaksjoner');
+    act(() => {
+      store.upsertEvent({ id: 'ev-k', name: 'København', emoji: '🎉', budget: null, currency: 'NOK', startDate: null, endDate: null, note: '', items: [], archived: false, createdAt: '' });
+    });
+    const list = screen.getByRole('region', { name: 'Transaksjonsliste' });
+    await user.click(within(list).getAllByRole('button')[0]);
+    const dialog = screen.getByRole('dialog', { name: 'Transaksjon' });
+    await user.selectOptions(within(dialog).getByLabelText(/^Hendelse/), 'ev-k');
+    expect(store.data.transactions.filter((t) => t.eventId === 'ev-k')).toHaveLength(1);
+  });
+});

@@ -10,6 +10,7 @@ import { BusinessPage } from './pages/Business';
 import { AccountsPage } from './pages/Accounts';
 import { CardDetailPage, CardsPage } from './pages/Cards';
 import { FormuePage } from './pages/Formue';
+import { EventDetailPage, EventsPage } from './pages/Events';
 import { ImportPage } from './pages/Import';
 import { OverviewPage } from './pages/Overview';
 import { SettingsPage } from './pages/Settings';
@@ -38,6 +39,8 @@ export function AppRoutes() {
         <Route path="/kort" element={<CardsPage />} />
         <Route path="/kort/:id" element={<CardDetailPage />} />
         <Route path="/formue" element={<FormuePage />} />
+        <Route path="/hendelser" element={<EventsPage />} />
+        <Route path="/hendelser/:id" element={<EventDetailPage />} />
         <Route path="/bedrift" element={<BusinessPage />} />
         <Route path="/innstillinger" element={<SettingsPage />} />
         <Route

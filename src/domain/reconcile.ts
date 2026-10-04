@@ -50,6 +50,7 @@ function carryUserFields(target: Transaction, from: Transaction): Transaction {
     kind: from.userKind ? from.kind : target.kind,
     userKind: from.userKind,
     linkedTransactionId: from.userKind ? from.linkedTransactionId : target.linkedTransactionId,
+    eventId: from.eventId ?? target.eventId ?? null,
   };
 }
 

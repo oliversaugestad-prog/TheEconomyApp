@@ -141,6 +141,8 @@ export interface Transaction {
   importFingerprint?: string;
   /** Kortets bransjekode (MCC) når banken oppgir den. */
   mcc?: string | null;
+  /** Hendelse/tur transaksjonen er koblet til (valgt av brukeren). */
+  eventId?: string | null;
 }
 
 /** `months`: hver N. måned (N i `everyMonths`), f.eks. hver 4. måned. */
@@ -283,4 +285,32 @@ export interface AppData {
   business?: BusinessData;
   /** Private investeringer, eiendeler og lån som ikke kommer fra banktilkobling. */
   personalAssets?: BusinessData;
+  /** Hendelser og turer med eget budsjett (f.eks. «Marokko-tur»). */
+  events?: SpendEvent[];
+}
+
+/** Utgift som ikke finnes i banken, f.eks. kontanter eller noe en venn la ut for deg. */
+export interface EventItem {
+  id: string;
+  name: string;
+  /** Positivt beløp = utgift. */
+  amount: Minor;
+  currency: CurrencyCode;
+  date: IsoDate | null;
+}
+
+/** En hendelse, tur eller ting som kjøp kan kobles til, med valgfritt budsjett. */
+export interface SpendEvent {
+  id: string;
+  name: string;
+  emoji: string;
+  /** Budsjett i `currency`. `null` = uten budsjett. */
+  budget: Minor | null;
+  currency: CurrencyCode;
+  startDate: IsoDate | null;
+  endDate: IsoDate | null;
+  note: string;
+  items: EventItem[];
+  archived: boolean;
+  createdAt: IsoTimestamp;
 }
