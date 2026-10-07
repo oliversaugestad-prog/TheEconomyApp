@@ -2,7 +2,7 @@ import { Archive, Calculator, CalendarRange, Link2, Pencil, Plus, Search, Trash2
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { sortByDateDesc } from '../../domain/calculations';
-import { formatDate } from '../../domain/dates';
+import { addDays, formatDate } from '../../domain/dates';
 import { summarizeEvent, suggestEventTransactions, type EventSummary } from '../../domain/events';
 import { formatMoney, parseAmount } from '../../domain/money';
 import type { EventItem, SpendEvent, Transaction } from '../../domain/types';
@@ -229,6 +229,14 @@ export function EventDetailPage() {
   const accById = new Map(data.accounts.map((a) => [a.id, a]));
   const total = s.byCategory.reduce((sum, c) => sum + c.amount, 0);
   const estimates = ev.items.filter((i) => i.estimate);
+  const linkedTxOf = (it: EventItem) =>
+    it.done && it.linkedTransactionId ? s.transactions.find((t) => t.id === it.linkedTransactionId) : undefined;
+  const estimateStatus = (it: EventItem) => {
+    const tx = linkedTxOf(it);
+    if (tx) return `Betalt – koblet til «${tx.counterparty}» ${formatDate(tx.bookingDate, 'short')} (bankbeløpet telles)`;
+    if (it.done) return 'Betalt – telles som brukt';
+    return it.date ? `Antatt ${formatDate(it.date, 'short')}` : 'Anslag – ikke betalt ennå';
+  };
   const actualItems = ev.items.filter((i) => !i.estimate);
 
   return (
@@ -288,7 +296,9 @@ export function EventDetailPage() {
         <div className="card-head" style={{ padding: '18px 18px 0' }}>
           <div>
             <h2 id="ev-est">Anslag – det du tror det blir</h2>
-            <p className="xsmall subtle">Antatt pris for ting som ikke er betalt ennå, f.eks. hotell, leiebil eller mat. Huk av «Betalt» når det faktiske kjøpet er koblet.</p>
+            <p className="xsmall subtle">
+              Antatt pris for ting som ikke er betalt ennå, f.eks. hotell, leiebil eller mat. Huk av «Betalt» når du har betalt – da flyttes beløpet til «Brukt». Trykk på anslaget for å justere til faktisk pris eller koble kjøpet fra banken.
+            </p>
           </div>
           <button type="button" className="btn small" onClick={() => setAddingItem('estimate')} aria-label="Legg til anslag">
             <Plus size={16} aria-hidden="true" />
@@ -303,22 +313,30 @@ export function EventDetailPage() {
                     <input
                       type="checkbox"
                       checked={!!it.done}
-                      onChange={(e) => store.upsertEvent({ ...ev, items: ev.items.map((i) => (i.id === it.id ? { ...i, done: e.target.checked } : i)) })}
+                      onChange={(e) => store.upsertEvent({ ...ev, items: ev.items.map((i) => (i.id === it.id ? { ...i, done: e.target.checked, linkedTransactionId: e.target.checked ? i.linkedTransactionId : null } : i)) })}
                       aria-label={`${it.name} er betalt`}
                     />
                     <span className="xsmall subtle">Betalt</span>
                   </label>
                   <button type="button" className="list-item" style={{ flex: 1, minWidth: 0 }} onClick={() => setAddingItem(it)}>
                     <span className="li-main">
-                      <span className="li-title" style={{ display: 'block', textDecoration: it.done ? 'line-through' : undefined, opacity: it.done ? 0.6 : 1 }}>
+                      <span className="li-title" style={{ display: 'block' }}>
                         {it.name}
+                        {it.done && <span className="badge ok" style={{ marginLeft: 6 }}>Betalt</span>}
                       </span>
                       <span className="li-sub" style={{ display: 'block' }}>
-                        {it.done ? 'Betalt – telles ikke lenger som anslag' : it.date ? `Antatt ${formatDate(it.date, 'short')}` : 'Anslag'}
+                        {estimateStatus(it)}
                       </span>
                     </span>
-                    <span className="li-end" style={{ opacity: it.done ? 0.6 : 1 }}>
-                      ca. <Amount value={it.amount} currency={it.currency} />
+                    <span className="li-end">
+                      {linkedTxOf(it) ? (
+                        <Amount value={-linkedTxOf(it)!.amount} currency={linkedTxOf(it)!.currency} />
+                      ) : (
+                        <>
+                          {!it.done && 'ca. '}
+                          <Amount value={it.amount} currency={it.currency} />
+                        </>
+                      )}
                     </span>
                   </button>
                 </li>
@@ -404,7 +422,7 @@ export function EventDetailPage() {
           )}
           {s.manual > 0 && (
             <p className="small muted" style={{ marginTop: 10 }}>
-              + utgifter uten kort: <Amount value={s.manual} currency={s.currency} />
+              + {s.paidEstimates > 0 ? 'betalte anslag og utgifter uten kort' : 'utgifter uten kort'}: <Amount value={s.manual} currency={s.currency} />
             </p>
           )}
         </section>
@@ -732,7 +750,19 @@ function ItemDialog({ ev, item, estimate, onClose }: { ev: SpendEvent; item: Eve
   const [currency, setCurrency] = useState(item?.currency ?? ev.currency);
   const [amount, setAmount] = useState(item ? formatMoney(item.amount, item.currency).replace(/[^\d,\s]/g, '').trim() : '');
   const [date, setDate] = useState(item?.date ?? ev.startDate ?? '');
+  const [done, setDone] = useState(!!item?.done);
+  const [linkedTx, setLinkedTx] = useState(item?.linkedTransactionId ?? '');
   const [error, setError] = useState<string | null>(null);
+  const data = useData();
+  // Kjøp som kan ha betalt anslaget: allerede koblet til hendelsen, eller utgifter fra perioden.
+  const txOptions = useMemo(() => {
+    const from = ev.startDate ? addDays(ev.startDate, -60) : null;
+    return sortByDateDesc(
+      data.transactions.filter(
+        (t) => t.amount < 0 && t.kind !== 'internal_transfer' && t.kind !== 'card_payment' && (t.eventId === ev.id || (!t.eventId && (!from || t.bookingDate >= from))),
+      ),
+    ).slice(0, 60);
+  }, [data.transactions, ev.id, ev.startDate]);
 
   const save = (items: EventItem[]) => store.upsertEvent({ ...ev, items });
 
@@ -747,9 +777,11 @@ function ItemDialog({ ev, item, estimate, onClose }: { ev: SpendEvent; item: Eve
       amount: Math.abs(minor),
       currency,
       date: date || null,
-      ...(estimate ? { estimate: true, done: item?.done ?? false } : {}),
+      ...(estimate ? { estimate: true, done: done || !!linkedTx, linkedTransactionId: linkedTx || null } : {}),
     };
     save(item ? ev.items.map((i) => (i.id === item.id ? next : i)) : [...ev.items, next]);
+    // Det faktiske kjøpet kobles også til hendelsen, så det vises og telles der.
+    if (estimate && linkedTx) store.setTransactionsEvent([linkedTx], ev.id);
     onClose();
   };
 
@@ -762,7 +794,7 @@ function ItemDialog({ ev, item, estimate, onClose }: { ev: SpendEvent; item: Eve
             <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={estimate ? 'F.eks. Hotell 7 netter' : 'F.eks. Kontanter i Marrakech'} />
           </label>
           <label className="field">
-            <span>{estimate ? 'Antatt pris' : 'Beløp'}</span>
+            <span>{estimate ? (done ? 'Pris (juster til faktisk)' : 'Antatt pris') : 'Beløp'}</span>
             <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="F.eks. 1 200" />
           </label>
           <label className="field">
@@ -778,9 +810,29 @@ function ItemDialog({ ev, item, estimate, onClose }: { ev: SpendEvent; item: Eve
             <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
         </div>
+        {estimate && (
+          <div className="stack-sm">
+            <label className="check">
+              <input type="checkbox" checked={done || !!linkedTx} disabled={!!linkedTx} onChange={(e) => setDone(e.target.checked)} />
+              <span className="small">Betalt – flytt beløpet til «Brukt»</span>
+            </label>
+            <label className="field">
+              <span>Faktisk kjøp fra banken (valgfritt)</span>
+              <select className="select" value={linkedTx} onChange={(e) => setLinkedTx(e.target.value)}>
+                <option value="">Ikke koblet – bruk beløpet over</option>
+                {txOptions.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {formatDate(t.bookingDate, 'short')} · {t.counterparty} · {formatMoney(-t.amount, t.currency)}
+                  </option>
+                ))}
+              </select>
+              <span className="hint">Velger du kjøpet, telles bankbeløpet i stedet for anslaget – aldri begge.</span>
+            </label>
+          </div>
+        )}
         <p className="xsmall subtle">
           {estimate
-            ? 'Et anslag er bare en plan. Det teller i «Forventet totalt» til du huker av «Betalt», og endrer ikke saldo eller forbruk.'
+            ? 'Ikke betalt: teller i «Forventet totalt». Betalt: teller som brukt. Endrer ikke saldo eller forbruk i oversikten.'
             : 'Bare for hendelsens budsjett – endrer ikke saldo eller forbruk i oversikten.'}
         </p>
         {error && (

@@ -42,20 +42,29 @@ describe('hendelser', () => {
     expect(s.remaining).toBe(-100_000);
   });
 
-  it('regner forventet totalt med anslag, og slutter å telle betalte anslag', () => {
+  it('regner forventet totalt med anslag, og flytter betalte anslag til brukt', () => {
     const base = { ...ev, budget: 1_000_000, items: [
       { id: 'h', name: 'Hotell', amount: 600_000, currency: 'NOK', date: null, estimate: true },
       { id: 'b', name: 'Leiebil', amount: 300_000, currency: 'NOK', date: null, estimate: true, done: true },
     ] };
     const txs = [tx({ accountId: 'k', amount: -500_000, counterparty: 'Fly', eventId: 'ev1' })];
     const s = summarizeEvent(base, txs, rates);
-    expect(s.spent).toBe(500_000);
+    // Fly 5 000 + betalt leiebil 3 000 = 8 000 brukt; hotell 6 000 er fortsatt anslag
+    expect(s.spent).toBe(800_000);
+    expect(s.paidEstimates).toBe(300_000);
     expect(s.estimated).toBe(600_000);
-    expect(s.forecast).toBe(1_100_000);
-    expect(s.forecastRemaining).toBe(-100_000);
+    expect(s.forecast).toBe(1_400_000);
+    expect(s.forecastRemaining).toBe(-400_000);
     expect(s.forecastStatus).toBe('over');
-    // Brukt alene er fortsatt innenfor
     expect(s.status).toBe('ok');
+  });
+
+  it('teller bankkjøpet – ikke anslaget – når betalt anslag er koblet til kjøpet', () => {
+    const fly = tx({ id: 'fly', accountId: 'k', amount: -332_700, counterparty: 'Norwegian', eventId: 'ev1' });
+    const base = { ...ev, items: [{ id: 'f', name: 'Flybilletter', amount: 350_000, currency: 'NOK', date: null, estimate: true, done: true, linkedTransactionId: 'fly' }] };
+    expect(summarizeEvent(base, [fly], rates).spent).toBe(332_700);
+    // Kobles kjøpet fra hendelsen, telles det betalte anslaget i stedet
+    expect(summarizeEvent(base, [{ ...fly, eventId: null }], rates).spent).toBe(350_000);
   });
 
   it('foreslår ukoblede kjøp i perioden, inkludert to dager før start', () => {

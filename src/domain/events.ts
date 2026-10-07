@@ -7,8 +7,10 @@ export interface EventSummary {
   currency: CurrencyCode;
   /** Brukt totalt: koblede kjøp (minus refusjoner) + manuelle utgifter. */
   spent: Minor;
-  /** Herav manuelle utgifter. */
+  /** Herav manuelle utgifter (utgifter uten kort og betalte anslag uten koblet kjøp). */
   manual: Minor;
+  /** Herav betalte anslag som telles med sitt eget beløp. */
+  paidEstimates: Minor;
   /** Anslag som ikke er betalt ennå. */
   estimated: Minor;
   /** Forventet totalt: brukt + gjenstående anslag. */
@@ -59,15 +61,21 @@ export function summarizeEvent(ev: SpendEvent, transactions: Transaction[], rate
   }
   let manual = 0;
   let estimated = 0;
+  let paidEstimates = 0;
+  const linkedIds = new Set(linked.map((t) => t.id));
   for (const it of ev.items) {
-    if (it.estimate && it.done) continue;
+    // Betalt anslag med koblet bankkjøp: kjøpet er allerede talt med.
+    if (it.estimate && it.done && it.linkedTransactionId && linkedIds.has(it.linkedTransactionId)) continue;
     const c = convert(it.amount, it.currency, ev.currency, rates);
     if (!c) {
       missing += 1;
       continue;
     }
-    if (it.estimate) estimated += c.amount;
-    else manual += c.amount;
+    if (it.estimate && !it.done) estimated += c.amount;
+    else {
+      manual += c.amount;
+      if (it.estimate) paidEstimates += c.amount;
+    }
   }
   spent += manual;
   const statusOf = (value: Minor) => {
@@ -79,11 +87,12 @@ export function summarizeEvent(ev: SpendEvent, transactions: Transaction[], rate
   const usage = ev.budget ? spent / ev.budget : ev.budget === 0 ? (spent > 0 ? Infinity : 0) : null;
   const status = statusOf(spent);
   const forecast = spent + estimated;
-  const dates = [...linked.map((t) => t.bookingDate), ...ev.items.filter((i) => !i.estimate).map((i) => i.date).filter((d): d is string => !!d)].sort();
+  const dates = [...linked.map((t) => t.bookingDate), ...ev.items.filter((i) => !i.estimate || i.done).map((i) => i.date).filter((d): d is string => !!d)].sort();
   return {
     currency: ev.currency,
     spent,
     manual,
+    paidEstimates,
     estimated,
     forecast,
     forecastRemaining: ev.budget === null ? null : ev.budget - forecast,

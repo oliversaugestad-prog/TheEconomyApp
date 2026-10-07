@@ -303,8 +303,10 @@ export interface EventItem {
   date: IsoDate | null;
   /** Anslått/antatt pris – ikke betalt ennå. */
   estimate?: boolean;
-  /** Anslaget er betalt (det faktiske kjøpet er koblet) og telles ikke lenger. */
+  /** Anslaget er betalt: beløpet telles som brukt (med mindre et bankkjøp er koblet). */
   done?: boolean;
+  /** Det faktiske bankkjøpet som betalte anslaget. Da telles kjøpet, ikke anslaget. */
+  linkedTransactionId?: string | null;
 }
 
 /** En hendelse, tur eller ting som kjøp kan kobles til, med valgfritt budsjett. */

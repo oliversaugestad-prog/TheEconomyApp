@@ -439,5 +439,8 @@ describe('Anslag på hendelser', () => {
     expect(screen.getAllByText(/Forventet totalt/).length).toBeGreaterThan(0);
     await user.click(screen.getByRole('checkbox', { name: 'Hotell er betalt' }));
     expect(store.data.events![0].items[0].done).toBe(true);
+    // Betalt anslag teller som brukt
+    const hero = screen.getByText(/^Brukt/).closest('section')!;
+    expect(within(hero).getByText(/6\s000,00\skr/, { selector: '.big *, .big' })).toBeInTheDocument();
   });
 });
