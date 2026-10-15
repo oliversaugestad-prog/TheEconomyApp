@@ -444,3 +444,24 @@ describe('Anslag på hendelser', () => {
     expect(within(hero).getByText(/6\s000,00\skr/, { selector: '.big *, .big' })).toBeInTheDocument();
   });
 });
+
+describe('Innbetaling på manuelt kort', () => {
+  it('registrerer innbetaling og kan angre', async () => {
+    const { user, store } = setup('/kort');
+    await user.click(screen.getAllByRole('button', { name: 'Legg til kort manuelt' })[0]);
+    const add = screen.getByRole('dialog', { name: 'Legg til konto manuelt' });
+    await user.type(within(add).getByLabelText('Bank / utsteder'), 'American Express');
+    await user.type(within(add).getByLabelText('Kontonavn'), 'Amex');
+    await user.type(within(add).getByLabelText('Utestående gjeld'), '10 000');
+    await user.click(within(add).getByRole('button', { name: 'Legg til' }));
+    const card = () => store.data.accounts.find((a) => a.name === 'Amex')!;
+    await user.click(screen.getByRole('button', { name: /Registrer innbetaling/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Registrer innbetaling' });
+    await user.clear(within(dialog).getByLabelText(/Beløp/));
+    await user.type(within(dialog).getByLabelText(/Beløp/), '4 000');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrer' }));
+    expect(card().bookedBalance).toBe(-600_000);
+    await user.click(screen.getByRole('button', { name: 'Angre' }));
+    expect(card().bookedBalance).toBe(-1_000_000);
+  });
+});

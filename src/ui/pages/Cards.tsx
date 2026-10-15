@@ -6,6 +6,7 @@ import { formatDate, formatMonth, monthKey } from '../../domain/dates';
 import { formatMoney, parseAmount, sumMoney } from '../../domain/money';
 import type { Account, CardStatement, Transaction } from '../../domain/types';
 import { useData, useStore, useToday } from '../../state/StoreContext';
+import { isManualCard } from '../../domain/cardPayments';
 import { Amount } from '../components/Amount';
 import { AddAccountDialog } from '../components/AccountForms';
 import { Dialog } from '../components/Dialog';
@@ -207,6 +208,7 @@ export function CardDetailPage() {
   const [editStatement, setEditStatement] = useState(false);
   const [params, setParams] = useSearchParams();
   const [editingCard, setEditingCard] = useState(params.get('rediger') === '1');
+  const [paying, setPaying] = useState(false);
   useEffect(() => {
     if (params.get('rediger') === '1') setParams({}, { replace: true });
   }, [params, setParams]);
@@ -225,6 +227,8 @@ export function CardDetailPage() {
   const conn = data.connections.find((c) => c.id === card.connectionId);
   const st = card.card?.statement ?? null;
   const month = monthKey(today);
+  const manualCard = isManualCard(card, data);
+  const payments = (card.card?.payments ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <Page
@@ -293,6 +297,60 @@ export function CardDetailPage() {
         </Link>
       </div>
 
+      {manualCard && (
+        <section className="card flush" aria-labelledby="pay-h">
+          <div className="card-head" style={{ padding: '18px 18px 0' }}>
+            <div>
+              <h2 id="pay-h">Innbetalinger</h2>
+              <p className="xsmall subtle">
+                Betalinger til {card.card?.issuer ?? card.bankName} fra en tilkoblet bank trekkes fra gjelden automatisk. Betalte du fra et annet sted, registrerer du det her.
+              </p>
+            </div>
+            <button type="button" className="btn small" onClick={() => setPaying(true)}>
+              <Plus size={16} aria-hidden="true" /> Registrer innbetaling
+            </button>
+          </div>
+          {payments.length ? (
+            <ul className="list" style={{ marginTop: 8 }}>
+              {payments.map((p) => {
+                const tx = p.transactionId ? data.transactions.find((t) => t.id === p.transactionId) : undefined;
+                return (
+                  <li key={p.id} className="row" style={{ gap: 0 }}>
+                    <div className="list-item" style={{ flex: 1, minWidth: 0, cursor: 'default' }}>
+                      <span className="li-main">
+                        <span className="li-title" style={{ display: 'block' }}>
+                          {tx ? `Fra banken: ${tx.counterparty}` : 'Registrert av deg'}
+                        </span>
+                        <span className="li-sub" style={{ display: 'block' }}>
+                          {formatDate(p.date, 'short')}
+                          {tx ? ` · ${data.accounts.find((a) => a.id === tx.accountId)?.name ?? ''}` : ''}
+                          {p.applied < p.amount ? ` · trukket fra ${formatMoney(p.applied, card.currency)} (gjelden er 0)` : ''}
+                        </span>
+                      </span>
+                      <span className="li-end">
+                        <Amount value={p.amount} currency={card.currency} signed />
+                      </span>
+                    </div>
+                    <button type="button" className="btn ghost small" style={{ marginRight: 12 }} onClick={() => store.undoCardPayment(card.id, p.id)}>
+                      Angre
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="small muted" style={{ padding: '10px 18px 18px' }}>
+              Ingen innbetalinger registrert siden gjelden sist ble satt{card.balanceUpdatedAt ? ` (${formatDate(card.balanceUpdatedAt.slice(0, 10), 'short')})` : ''}.
+            </p>
+          )}
+          {payments.some((p) => p.applied < p.amount) && (
+            <p className="xsmall subtle" style={{ padding: '0 18px 16px' }}>
+              En innbetaling var større enn registrert gjeld, så gjelden er satt til 0. Har du handlet på kortet siden, oppdaterer du gjelden under «Rediger».
+            </p>
+          )}
+        </section>
+      )}
+
       <section className="card">
         <div className="card-head">
           <h2>Siste faktura</h2>
@@ -340,6 +398,7 @@ export function CardDetailPage() {
       </section>
 
       {openTx && <TransactionDetail key={openTx.id} tx={openTx} onClose={() => setOpenTx(null)} />}
+      {paying && <PaymentDialog card={card} onClose={() => setPaying(false)} />}
       {editStatement && (
         <StatementDialog
           card={card}
@@ -351,6 +410,58 @@ export function CardDetailPage() {
         />
       )}
     </Page>
+  );
+}
+
+function PaymentDialog({ card, onClose }: { card: Account; onClose: () => void }) {
+  const store = useStore();
+  const today = useToday();
+  const debt = cardDebt(card);
+  const [amount, setAmount] = useState(debt && debt > 0 ? formatMoney(debt, card.currency).replace(/[^\d,\s]/g, '').trim() : '');
+  const [date, setDate] = useState(today);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <Dialog open onClose={onClose} title="Registrer innbetaling">
+      <form
+        className="stack"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          const minor = parseAmount(amount, card.currency);
+          if (minor === null || minor <= 0) return setError('Oppgi beløpet du betalte, f.eks. 5 000.');
+          store.registerCardPayment(card.id, minor, date || today);
+          onClose();
+        }}
+      >
+        <p className="small muted">
+          Gjelden nå: <Amount value={debt} currency={card.currency} unknownLabel="ukjent" />. Innbetalingen trekkes fra gjelden på {card.name}.
+        </p>
+        <div className="form-grid two">
+          <label className="field">
+            <span>Beløp ({card.currency})</span>
+            <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="F.eks. 5 000" />
+          </label>
+          <label className="field">
+            <span>Dato</span>
+            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>
+        </div>
+        <p className="xsmall subtle">Betalte du fra en tilkoblet bank, trekkes betalingen fra automatisk når den er bokført – da trenger du ikke registrere den her.</p>
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Avbryt
+          </button>
+          <button type="submit" className="btn primary">
+            Registrer
+          </button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 

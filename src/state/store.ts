@@ -1,4 +1,5 @@
 import { cleanCounterparty, normalizeCounterparty, suggestRuleKey } from '../domain/categories';
+import { applyBankCardPayments, withPayment } from '../domain/cardPayments';
 import { todayIn } from '../domain/dates';
 import { classifyTransactions, mergeTransactions, type MergeStats } from '../domain/reconcile';
 import { emptyBusiness, type AssetScope } from '../domain/business';
@@ -116,7 +117,37 @@ export class SaldoStore {
       const name = cleanCounterparty(t.counterparty) || t.counterparty;
       return name === t.counterparty ? t : { ...t, counterparty: name };
     });
-    return { ...d, transactions: classifyTransactions(cleaned, d.accounts, d.rules, d.settings.ownNames ?? []) };
+    // Bankbetalinger til manuelle kort (f.eks. Amex) trekkes fra kortets gjeld.
+    return applyBankCardPayments({ ...d, transactions: classifyTransactions(cleaned, d.accounts, d.rules, d.settings.ownNames ?? []) });
+  }
+
+  /** Registrer en innbetaling på et manuelt kort selv (f.eks. betalt fra en bank som ikke er koblet til). */
+  registerCardPayment(cardId: string, amount: Minor, date: string) {
+    this.update((d) => ({
+      ...d,
+      accounts: d.accounts.map((a) => (a.id === cardId ? withPayment(a, Math.abs(amount), date, null, newId('pay')) : a)),
+    }));
+  }
+
+  /** Angre en innbetaling: gjelden settes tilbake, og bankbetalingen trekkes ikke fra igjen. */
+  undoCardPayment(cardId: string, paymentId: string) {
+    this.update((d) => ({
+      ...d,
+      accounts: d.accounts.map((a) => {
+        if (a.id !== cardId || !a.card) return a;
+        const p = (a.card.payments ?? []).find((x) => x.id === paymentId);
+        if (!p) return a;
+        return {
+          ...a,
+          bookedBalance: a.bookedBalance === null ? null : a.bookedBalance - p.applied,
+          card: {
+            ...a.card,
+            payments: (a.card.payments ?? []).filter((x) => x.id !== paymentId),
+            ignoredPaymentIds: p.transactionId ? [...new Set([...(a.card.ignoredPaymentIds ?? []), p.transactionId])] : a.card.ignoredPaymentIds,
+          },
+        };
+      }),
+    }));
   }
 
   /* ------------------------------ demodata ----------------------------- */
