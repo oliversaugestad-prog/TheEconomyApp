@@ -187,6 +187,22 @@ export function mergeTransactions(
   return { transactions: result.filter((_, i) => !removed.has(i)), stats };
 }
 
+/**
+ * Kortet en betaling fra bankkonto går til, ut fra teksten: betaling til kortutstederen
+ * (f.eks. «American Express», eller «Kredittbanken» for SpareBank 1-kort), eller tydelig
+ * kortfaktura-tekst med kortets navn.
+ */
+export function paymentTargetCard(t: Pick<Transaction, 'counterparty' | 'description'>, cards: Account[]): Account | undefined {
+  const text = `${t.counterparty} ${t.description}`.toLowerCase();
+  const hinted = /(kredittkort|kortfaktura|faktura kort|innbetaling kort)/.test(text);
+  return cards.find((c) => {
+    const issuer = (c.card?.issuer ?? c.bankName).toLowerCase();
+    if (issuer.length >= 5 && text.includes(issuer) && !/sparebank|bank$/.test(issuer)) return true;
+    if (/kredittbanken/.test(text) && /sparebank 1/.test(issuer)) return true;
+    return hinted && (text.includes(c.name.toLowerCase()) || text.includes(c.bankName.toLowerCase()));
+  });
+}
+
 const TRANSFER_HINT = /(overf|transfer|egen konto|egne konto|innbetaling kort|kredittkort|kreditt as|kredittbank|nedbetaling|sparing|bsu|fra konto|til konto|faktura kort|kortfaktura|top.?up|påfyll|revolut|sent from|exchanged)/i;
 /** Veksling mellom valutakontoer hos samme bank (f.eks. Revolut) – flytting av egne penger. */
 const EXCHANGE = /^(exchanged (to|from)|exchange (to|from)|valutaveksling|veksling)\b/i;
@@ -309,17 +325,7 @@ export function classifyTransactions(
     const t = txs[i];
     if (t.amount >= 0 || t.userKind || t.kind !== 'normal' || linked.has(i)) continue;
     if (accounts.get(t.accountId)?.type === 'credit_card') continue;
-    const text = `${t.counterparty} ${t.description}`.toLowerCase();
-    const hinted = /(kredittkort|kortfaktura|faktura kort|innbetaling kort)/.test(text);
-    const card = cards.find((c) => {
-      const issuer = (c.card?.issuer ?? c.bankName).toLowerCase();
-      // Betaling til selve kortutstederen (f.eks. «American Express» eller «Kredittbanken»
-      // for SpareBank 1-kort) er innbetaling på kortet, ikke forbruk.
-      if (issuer.length >= 5 && text.includes(issuer) && !/sparebank|bank$/.test(issuer)) return true;
-      if (/kredittbanken/.test(text) && /sparebank 1/.test(issuer)) return true;
-      return hinted && (text.includes(c.name.toLowerCase()) || text.includes(c.bankName.toLowerCase()));
-    });
-    if (card) txs[i] = { ...t, kind: 'card_payment', linkedTransactionId: null };
+    if (paymentTargetCard(t, cards)) txs[i] = { ...t, kind: 'card_payment', linkedTransactionId: null };
   }
 
   // Innbetaling registrert på selve kortet (f.eks. «BETALING MOTTATT - TAKK» i en Amex-eksport)

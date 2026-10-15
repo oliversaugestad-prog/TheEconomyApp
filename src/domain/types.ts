@@ -53,6 +53,21 @@ export interface CardDetails {
   last4: string;
   creditLimit: Minor | null;
   statement: CardStatement | null;
+  /** Innbetalinger trukket fra gjelden på et manuelt kort (fra banken eller registrert selv). */
+  payments?: CardPayment[];
+  /** Bankbetalinger brukeren har valgt å ikke trekke fra (angret). */
+  ignoredPaymentIds?: string[];
+}
+
+export interface CardPayment {
+  id: string;
+  /** Positivt beløp som ble betalt inn på kortet. */
+  amount: Minor;
+  date: IsoDate;
+  /** Banktransaksjonen betalingen kom fra, hvis den ble funnet automatisk. */
+  transactionId: string | null;
+  /** Hvor mye gjelden faktisk ble redusert (kan være mindre om innbetalingen var større enn gjelden). */
+  applied: Minor;
 }
 
 export interface Account {
