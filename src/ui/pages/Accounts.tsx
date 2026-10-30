@@ -56,7 +56,7 @@ export function AccountsPage() {
           <Plus size={16} aria-hidden="true" /> Manuell konto
         </button>
         <Link to="/kontoer/import" className="btn small">
-          <FileUp size={16} aria-hidden="true" /> Importer CSV
+          <FileUp size={16} aria-hidden="true" /> Importer CSV/PDF
         </Link>
         <button type="button" className="btn small" onClick={() => setConnecting(true)}>
           <Link2 size={16} aria-hidden="true" /> Koble til bank

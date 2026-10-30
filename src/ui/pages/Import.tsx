@@ -1,9 +1,12 @@
-import { CheckCircle2, FileUp, Upload } from 'lucide-react';
+import { CheckCircle2, FileUp, Loader2, Upload } from 'lucide-react';
 import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { guessMapping, parseCsv, positiveShare, previewImport, type CsvColumn, type CsvMapping } from '../../domain/csv';
 import { formatDate } from '../../domain/dates';
-import { useData, useStore } from '../../state/StoreContext';
+import { formatMoney } from '../../domain/money';
+import { parseStatementLines, statementToCsv, type PdfStatement } from '../../domain/pdfStatement';
+import { pdfToLines } from '../lib/pdfText';
+import { useData, useStore, useToday } from '../../state/StoreContext';
 import { AddAccountDialog } from '../components/AccountForms';
 import { Amount } from '../components/Amount';
 import { Notice } from '../components/common';
@@ -39,6 +42,10 @@ export function ImportPage() {
   /** `null` = automatisk forslag ut fra kontotype og beløpene i filen. */
   const [invert, setInvert] = useState<boolean | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [pdf, setPdf] = useState<PdfStatement | null>(null);
+  const [readingPdf, setReadingPdf] = useState(false);
+  const [updateStatement, setUpdateStatement] = useState(true);
+  const today = useToday();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const account = accounts.find((a) => a.id === accountId);
@@ -72,12 +79,29 @@ export function ImportPage() {
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     setFileError(null);
+    setPdf(null);
     if (!f) return;
-    if (f.size > 5_000_000) {
-      setFileError('Filen er for stor (maks 5 MB).');
+    if (f.size > 10_000_000) {
+      setFileError('Filen er for stor (maks 10 MB).');
       return;
     }
     const buf = await f.arrayBuffer();
+    if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+      setReadingPdf(true);
+      try {
+        const lines = await pdfToLines(buf);
+        const st = parseStatementLines(lines, today);
+        if (!lines.length) return setFileError('PDF-en inneholder ingen tekst (trolig et skannet bilde). Last ned fakturaen som PDF fra nettbanken, eller bruk CSV.');
+        if (!st.rows.length) return setFileError('Fant ingen transaksjoner i PDF-en. Formatet støttes kanskje ikke – prøv CSV fra kortutstederen.');
+        setPdf(st);
+        load(statementToCsv(st), f.name);
+      } catch {
+        setFileError('Kunne ikke lese PDF-en. Er den passordbeskyttet? Prøv å laste den ned på nytt, eller bruk CSV.');
+      } finally {
+        setReadingPdf(false);
+      }
+      return;
+    }
     // Norske banker eksporterer ofte i Windows-1252 – prøv UTF-8 først.
     let content = new TextDecoder('utf-8').decode(buf);
     if (content.includes(String.fromCharCode(0xfffd))) content = new TextDecoder('windows-1252').decode(buf);
@@ -87,6 +111,14 @@ export function ImportPage() {
   const doImport = () => {
     if (!account) return;
     const n = store.importCsv(account.id, preview);
+    // Fakturaopplysninger fra PDF-en lagres på kortet.
+    if (pdf && updateStatement && account.type === 'credit_card' && (pdf.total !== null || pdf.dueDate)) {
+      const prev = account.card?.statement;
+      store.updateCard(account.id, {
+        statement: { amount: pdf.total, minimumPayment: prev?.minimumPayment ?? null, dueDate: pdf.dueDate, source: 'manual', updatedAt: new Date().toISOString() },
+      });
+    }
+    setPdf(null);
     setResult({ imported: n, skipped: counts.dup + counts.err });
     setText('');
     setMapping(null);
@@ -95,9 +127,9 @@ export function ImportPage() {
   };
 
   return (
-    <Page title="Importer CSV" back={{ to: '/kontoer', label: 'Tilbake til kontoer' }} plain>
+    <Page title="Importer CSV eller PDF" back={{ to: '/kontoer', label: 'Tilbake til kontoer' }} plain>
       <p className="muted small">
-        Eksporter transaksjoner fra nettbanken – eller fra Amex under «Kontoutskrifter og aktivitet» → «Last ned» → CSV – og importer dem hit. Du ser en forhåndsvisning før noe lagres, og transaksjoner som allerede finnes, hoppes over.
+        Eksporter transaksjoner fra nettbanken som CSV – eller last opp PDF-fakturaen fra kredittkortet (f.eks. Amex eller SpareBank 1) – og importer dem hit. Du ser en forhåndsvisning før noe lagres, og transaksjoner som allerede finnes, hoppes over.
       </p>
 
       {result && (
@@ -155,14 +187,38 @@ export function ImportPage() {
         <h2>2. Velg fil</h2>
         <div className="row wrap">
           <label className="btn primary" style={{ position: 'relative' }}>
-            <Upload size={16} aria-hidden="true" /> Velg CSV-fil
-            <input ref={fileRef} type="file" accept=".csv,.txt,text/csv" onChange={onFile} className="sr-only" />
+            <Upload size={16} aria-hidden="true" /> Velg CSV- eller PDF-fil
+            <input ref={fileRef} type="file" accept=".csv,.txt,text/csv,.pdf,application/pdf" onChange={onFile} className="sr-only" />
           </label>
-          <button type="button" className="btn" onClick={() => load(SAMPLE, 'eksempel.csv')}>
+          <button type="button" className="btn" onClick={() => {
+            setPdf(null);
+            load(SAMPLE, 'eksempel.csv');
+          }}>
             <FileUp size={16} aria-hidden="true" /> Bruk eksempelfil
           </button>
           {fileName && <span className="small muted">{fileName}</span>}
         </div>
+        {readingPdf && (
+          <p className="small muted row">
+            <Loader2 size={16} className="spin" aria-hidden="true" /> Leser PDF-en …
+          </p>
+        )}
+        {pdf && (
+          <Notice title={`Fant ${pdf.rows.length} transaksjoner i PDF-en`}>
+            PDF-er har ingen fast struktur, så dette er et beste forsøk. Sjekk forhåndsvisningen før du importerer – rader som ikke er transaksjoner kan du rette i CSV eller la være.
+            {account?.type === 'credit_card' && (pdf.total !== null || pdf.dueDate) && (
+              <label className="check" style={{ marginTop: 8 }}>
+                <input type="checkbox" checked={updateStatement} onChange={(e) => setUpdateStatement(e.target.checked)} />
+                <span className="small">
+                  Oppdater fakturaen på kortet
+                  {pdf.total !== null ? ` – å betale ${formatMoney(pdf.total, account.currency)}` : ''}
+                  {pdf.dueDate ? `, forfall ${formatDate(pdf.dueDate, 'short')}` : ''}
+                </span>
+              </label>
+            )}
+          </Notice>
+        )}
+        <p className="xsmall subtle">PDF-en leses lokalt i nettleseren og sendes ikke noe sted. Skannede PDF-er (bilder) kan ikke leses.</p>
         {fileError && (
           <p className="error-text" role="alert">
             {fileError}
@@ -177,7 +233,10 @@ export function ImportPage() {
             rows={6}
             style={{ marginTop: 8, fontFamily: 'ui-monospace, monospace', fontSize: '0.8rem' }}
             value={text}
-            onChange={(e) => load(e.target.value, null)}
+            onChange={(e) => {
+              setPdf(null);
+              load(e.target.value, null);
+            }}
             aria-label="CSV-innhold"
             placeholder="Dato;Beskrivelse;Beløp"
           />
