@@ -107,7 +107,7 @@ export function CardsPage() {
           <Plus size={16} aria-hidden="true" /> Legg til kort
         </button>
         <Link to={`/kontoer/import${cards.find((c) => c.source !== 'bank' && !c.isDemo) ? `?konto=${cards.find((c) => c.source !== 'bank' && !c.isDemo)!.id}` : ''}`} className="btn small">
-          <FileUp size={16} aria-hidden="true" /> Importer CSV (f.eks. Amex)
+          <FileUp size={16} aria-hidden="true" /> Importer CSV/PDF (f.eks. Amex-faktura)
         </Link>
       </div>
       {cards.length === 0 ? (
@@ -293,7 +293,7 @@ export function CardDetailPage() {
 
       <div className="row wrap">
         <Link to={`/kontoer/import?konto=${card.id}`} className="btn small">
-          <FileUp size={16} aria-hidden="true" /> Importer transaksjoner (CSV)
+          <FileUp size={16} aria-hidden="true" /> Importer transaksjoner (CSV/PDF)
         </Link>
       </div>
 
