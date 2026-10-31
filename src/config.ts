@@ -12,7 +12,7 @@ export const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABL
 export const APP_URL = import.meta.env.VITE_APP_URL ?? 'https://oliversaugestad-prog.github.io/TheEconomyApp/';
 
 /** Adresser innloggingslenker kan sendes tilbake til. */
-const KNOWN_ORIGINS = ['https://savest.no', 'https://www.savest.no', 'https://oliversaugestad-prog.github.io', 'http://localhost:5173', 'http://localhost:4173'];
+const KNOWN_ORIGINS = ['https://saldo.savest.no', 'https://savest.no', 'https://www.savest.no', 'https://oliversaugestad-prog.github.io', 'http://localhost:5173', 'http://localhost:4173'];
 
 /** Adressen brukeren faktisk har åpnet appen på, så innloggingslenken kommer tilbake dit. */
 export function currentAppUrl(): string {

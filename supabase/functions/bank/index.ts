@@ -15,7 +15,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CALLBACK_URL = `${SUPABASE_URL}/functions/v1/bank`;
 const MAX_CONSENT_SECONDS = 180 * 86_400;
-const ALLOWED_ORIGINS = ['https://savest.no', 'https://www.savest.no', new URL(DEFAULT_APP_URL).origin, 'http://localhost:5173', 'http://localhost:4173'];
+const ALLOWED_ORIGINS = ['https://saldo.savest.no', 'https://savest.no', 'https://www.savest.no', new URL(DEFAULT_APP_URL).origin, 'http://localhost:5173', 'http://localhost:4173'];
 
 /** Adressen appen ble åpnet fra, dersom den er en av våre egne. */
 function safeReturnUrl(value: unknown): string | null {
