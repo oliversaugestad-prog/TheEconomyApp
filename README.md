@@ -4,7 +4,7 @@ Saldo er en privatøkonomi-app som samler kontoer, transaksjoner, abonnementer o
 
 > **Status:** Fungerende prototype. Uten innlogging kjører den med **syntetiske demodata**. Innlogget kan eieren koble til egne banker via Enable Banking (PSD2), og dataene lagres i Supabase (EU). Appen er ikke sikkerhetsrevidert. Se [docs/BANKINTEGRASJON.md](docs/BANKINTEGRASJON.md).
 
-**Nettadresse:** https://oliversaugestad-prog.github.io/TheEconomyApp/ (publiseres automatisk fra `main`).
+**Nettadresse:** https://saldo.savest.no/ (publiseres automatisk fra `main`).
 
 ## Kom i gang
 

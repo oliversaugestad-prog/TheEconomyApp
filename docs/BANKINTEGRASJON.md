@@ -30,7 +30,7 @@ Engangsoppsett (gjøres av eieren):
 
 1. Registrer en Production-applikasjon hos Enable Banking og koble til egne kontoer.
 2. Legg til `https://yxkzcnduisekbugqvgwk.supabase.co/functions/v1/bank` som tillatt redirect URL i applikasjonen.
-3. I Supabase: Authentication → URL Configuration → Site URL = `https://oliversaugestad-prog.github.io/TheEconomyApp/`.
+3. I Supabase: Authentication → URL Configuration → Site URL = `https://saldo.savest.no/`, og legg til `https://saldo.savest.no/**` under Redirect URLs.
 4. Logg inn i Saldo og last opp .pem-filen under Innstillinger.
 
 **Ikke verifisert ennå:** hvordan hver enkelt bank oppgir saldo på kredittkort (fortegn) og om den leverer reserverte transaksjoner. Dette sees først ved første ekte henting.
