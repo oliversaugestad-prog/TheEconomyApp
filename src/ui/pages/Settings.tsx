@@ -1,5 +1,5 @@
-import { Download, FlaskConical, Link2, ShieldCheck, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Download, FlaskConical, KeyRound, Link2, ShieldCheck, Trash2 } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CATEGORY_BY_ID } from '../../domain/categories';
 import { formatTimestamp } from '../../domain/dates';
@@ -11,6 +11,7 @@ import { Page } from '../Layout';
 import { ConnectBankDialog } from '../components/ConnectBank';
 import { BankSetup } from '../components/BankSetup';
 import { useBackend } from '../../backend/session';
+import { updatePassword } from '../../backend/supabase';
 
 const CURRENCIES = ['NOK', 'EUR', 'SEK', 'DKK', 'USD', 'GBP'];
 
@@ -203,6 +204,8 @@ export function SettingsPage() {
         </section>
       )}
 
+      {remote && <PasswordSection email={backend.email} />}
+
       <section className="card stack" aria-labelledby="privacy-h">
         <h2 id="privacy-h" className="row" style={{ gap: 8 }}>
           <ShieldCheck size={18} aria-hidden="true" /> Personvern og dine data
@@ -320,6 +323,73 @@ function OwnNamesCard() {
           </span>
         )}
       </div>
+    </section>
+  );
+}
+
+/** Sett eller bytt passord, slik at du kan logge inn uten å vente på e-post. */
+function PasswordSection({ email }: { email: string | null }) {
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaved(false);
+    if (pw.length < 8) return setError('Passordet må ha minst 8 tegn.');
+    if (pw !== pw2) return setError('Passordene er ikke like.');
+    setBusy(true);
+    setError(null);
+    try {
+      await updatePassword(pw);
+      setPw('');
+      setPw2('');
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Noe gikk galt.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="card stack" id="passord" aria-labelledby="pw-h">
+      <h2 id="pw-h" className="row" style={{ gap: 8 }}>
+        <KeyRound size={18} aria-hidden="true" /> Passord
+      </h2>
+      <p className="small muted">
+        Sett et passord for å logge inn med e-post og passord i stedet for lenke. Lenke på e-post virker fortsatt. Passordet lagres kryptert hos Supabase, ikke i Saldo.
+      </p>
+      <form className="stack-sm" onSubmit={save} noValidate>
+        {/* Skjult brukernavn hjelper passordbehandlere med å lagre riktig konto. */}
+        <input type="email" name="username" autoComplete="username" value={email ?? ''} readOnly hidden />
+        <label className="field">
+          <span>Nytt passord</span>
+          <input className="input" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Gjenta passord</span>
+          <input className="input" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+        </label>
+        <p className="xsmall subtle">Minst 8 tegn. En lengre setning er både sikrere og lettere å huske.</p>
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
+        {saved && (
+          <p className="small" role="status" style={{ color: 'var(--positive)' }}>
+            Passordet er lagret. Neste gang kan du logge inn med {email ?? 'e-posten din'} og passordet.
+          </p>
+        )}
+        <div className="row">
+          <button type="submit" className="btn primary" disabled={busy}>
+            {busy ? 'Lagrer …' : 'Lagre passord'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }

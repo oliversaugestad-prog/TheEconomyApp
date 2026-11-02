@@ -47,7 +47,12 @@ function Root() {
         // Ved retur fra innloggingslenken byttes ?code= mot en sesjon her.
         const { data } = await supabase().auth.getSession();
         const session = data.session;
-        if (/[?&]code=/.test(location.search)) history.replaceState(null, '', location.pathname + location.hash);
+        const fromReset = new URLSearchParams(location.search).get('passord') === 'ny';
+        if (/[?&](code|passord)=/.test(location.search)) {
+          // Etter «Glemt passord» går vi rett til passordfeltet i Innstillinger.
+          const hash = fromReset && session ? '#/innstillinger#passord' : location.hash;
+          history.replaceState(null, '', location.pathname + hash);
+        }
         if (session) {
           const remote = await loadRemote(session.user.id);
           const store = new SaldoStore(remoteRepository(session.user.id, remote), undefined, false);
