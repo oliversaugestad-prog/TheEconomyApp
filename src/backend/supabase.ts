@@ -26,10 +26,43 @@ export async function sendLoginLink(email: string): Promise<void> {
   if (error) throw new Error(loginErrorText(error.message));
 }
 
+/** Markør i lenken fra «Glemt passord», slik at appen åpner passordfeltet etter innlogging. */
+export const PASSWORD_RESET_FLAG = 'passord=ny';
+
+export async function signInWithPassword(email: string, password: string): Promise<void> {
+  const { error } = await supabase().auth.signInWithPassword({ email, password });
+  if (error) {
+    if (/invalid login credentials/i.test(error.message)) {
+      throw new Error('Feil e-post eller passord. Har du ikke satt passord ennå, logg inn med lenke først og sett det under Innstillinger.');
+    }
+    if (/email not confirmed/i.test(error.message)) throw new Error('E-postadressen er ikke bekreftet ennå. Logg inn med lenke først.');
+    throw new Error(loginErrorText(error.message));
+  }
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  const url = currentAppUrl();
+  const { error } = await supabase().auth.resetPasswordForEmail(email, {
+    redirectTo: `${url}${url.includes('?') ? '&' : '?'}${PASSWORD_RESET_FLAG}`,
+  });
+  if (error) throw new Error(loginErrorText(error.message));
+}
+
+export async function updatePassword(password: string): Promise<void> {
+  const { error } = await supabase().auth.updateUser({ password });
+  if (!error) return;
+  if (/same.*password|different from the old/i.test(error.message)) throw new Error('Det nye passordet må være forskjellig fra det gamle.');
+  if (/weak|short|at least/i.test(error.message)) throw new Error('Passordet er for svakt. Bruk minst 8 tegn, gjerne en lengre setning.');
+  if (/reauthenticat|nonce/i.test(error.message)) {
+    throw new Error('Supabase krever ny bekreftelse for å bytte passord. Logg ut, logg inn med lenke og prøv igjen.');
+  }
+  throw new Error(`Kunne ikke lagre passordet: ${error.message}`);
+}
+
 function loginErrorText(msg: string): string {
-  if (/rate limit/i.test(msg)) return 'For mange forsøk. Vent litt før du ber om en ny lenke.';
+  if (/rate limit|too many/i.test(msg)) return 'For mange forsøk. Vent litt og prøv igjen.';
   if (/invalid/i.test(msg)) return 'E-postadressen ser ikke gyldig ut.';
-  return `Kunne ikke sende innloggingslenke: ${msg}`;
+  return `Innloggingen feilet: ${msg}`;
 }
 
 export async function signOut(): Promise<void> {
